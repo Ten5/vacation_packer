@@ -1,0 +1,2251 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0284c7" id="meta-theme-color">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PackList">
+    <meta name="application-name" content="PackList">
+    <meta name="description" content="Offline-capable multi-trip vacation packing checklist and planner.">
+    <link rel="manifest" href="./manifest.json" id="pwa-manifest">
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" id="pwa-favicon">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" id="pwa-apple-icon">
+    <title>Wanderlust Pack — Smart Vacation Checklist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            300: '#5eead4',
+                            400: '#2dd4bf',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Checkbox Animation */
+        .custom-checkbox input:checked + div {
+            background-color: #0d9488;
+            border-color: #0d9488;
+        }
+        .custom-checkbox input:checked + div svg {
+            stroke-dashoffset: 0;
+        }
+        .custom-checkbox div svg {
+            stroke-dasharray: 24;
+            stroke-dashoffset: 24;
+            transition: stroke-dashoffset 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Smooth strikethrough transition */
+        .item-text {
+            position: relative;
+            transition: color 0.2s ease;
+        }
+        /* Hide scrollbar for filter pills on mobile */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        @keyframes confetti-fall {
+            0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(40px) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans min-h-screen transition-colors duration-200 selection:bg-brand-500 selection:text-white pb-16">
+
+    <!-- Top Sticky Header & Progress Bar -->
+    <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors duration-200 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+            
+            <!-- Multi-Trip Switcher Bar -->
+            <div class="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800/80">
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1" id="trip-tabs-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <!-- Live Connectivity & PWA Status Pill -->
+                    <button onclick="openPwaModal()" id="connectivity-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition whitespace-nowrap" title="View PWA status, offline cache & installation guide">
+                        <span id="connectivity-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="connectivity-text" class="hidden md:inline">Online • PWA Ready</span>
+                        <span id="connectivity-text-short" class="md:hidden">PWA</span>
+                    </button>
+
+                    <button onclick="openNewTripModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-xs shadow-brand-500/20 transition active:scale-95 whitespace-nowrap" title="Create a new trip planner">
+                        <i class="ph-bold ph-plus"></i>
+                        <span>New Trip</span>
+                    </button>
+                    <button onclick="duplicateActiveTrip()" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="Duplicate active trip">
+                        <i class="ph ph-copy text-base"></i>
+                    </button>
+                    <button onclick="openDeleteTripModal()" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="Delete active trip">
+                        <i class="ph ph-trash-simple text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Header Top Row -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-500 to-emerald-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20 shrink-0">
+                            <i class="ph-fill ph-suitcase-rolling text-2xl"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 id="trip-title" contenteditable="true" spellcheck="false" class="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 rounded px-1 -ml-1 transition" title="Click to rename active trip">
+                                    Ultimate Vacation Pack
+                                </h1>
+                                <i class="ph ph-pencil-simple text-slate-400 text-sm hidden sm:inline-block pointer-events-none"></i>
+                            </div>
+                            <p id="trip-meta-subtitle" class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Stay organized & never leave essentials behind</p>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Theme Toggle -->
+                    <button id="theme-toggle-mobile" onclick="toggleTheme()" class="sm:hidden p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" aria-label="Toggle Dark Mode">
+                        <i class="ph ph-moon text-lg dark:hidden"></i>
+                        <i class="ph ph-sun text-lg hidden dark:inline-block text-amber-400"></i>
+                    </button>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <!-- Install App / PWA Guide Button -->
+                    <button id="install-app-btn" type="button" onclick="handleInstallClick(this)" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs shadow-sky-500/20 transition active:scale-95" title="Install PackList as a standalone app or view PWA guide">
+                        <i class="ph-bold ph-device-mobile-speaker text-base"></i>
+                        <span id="install-app-btn-text">📲 Install App</span>
+                    </button>
+
+                    <!-- Export Dropdown / Button -->
+                    <div class="relative inline-block">
+                        <button onclick="toggleExportMenu(event)" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 border border-brand-200/70 dark:border-brand-800/60 hover:bg-brand-100 dark:hover:bg-brand-900/60 transition active:scale-95" title="Export trips as JSON">
+                            <i class="ph ph-download-simple text-base"></i>
+                            <span>Export</span>
+                            <i class="ph-bold ph-caret-down text-[11px]"></i>
+                        </button>
+                        <div id="export-dropdown" class="hidden absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 py-1.5 z-50">
+                            <button onclick="exportChecklistJSON('all')" class="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2">
+                                <i class="ph ph-folders text-brand-500 text-base"></i>
+                                <div>
+                                    <div class="font-semibold">All Trips (Workspace)</div>
+                                    <div class="text-[10px] text-slate-400">Backup every trip list</div>
+                                </div>
+                            </button>
+                            <button onclick="exportChecklistJSON('current')" class="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2">
+                                <i class="ph ph-file-text text-indigo-500 text-base"></i>
+                                <div>
+                                    <div class="font-semibold">Current Trip Only</div>
+                                    <div class="text-[10px] text-slate-400">Export active planner</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Import JSON Button & Hidden File Input -->
+                    <input type="file" id="import-json-input" accept=".json,application/json" class="hidden" onchange="handleImportJSONFile(event)">
+                    <button onclick="triggerImportJSON()" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition active:scale-95" title="Restore trips from a JSON file">
+                        <i class="ph ph-upload-simple text-base"></i>
+                        <span>Import</span>
+                    </button>
+
+                    <!-- Clipboard Sync Modal Button -->
+                    <button onclick="openSyncModal()" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition active:scale-95" title="Copy or paste raw JSON to sync via clipboard">
+                        <i class="ph ph-arrows-left-right text-base"></i>
+                        <span class="hidden md:inline">Sync</span>
+                    </button>
+
+                    <button onclick="openModal('uncheck-modal')" id="uncheck-all-btn" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition active:scale-95">
+                        <i class="ph ph-arrow-counter-clockwise text-base"></i>
+                        <span>Unpack All</span>
+                    </button>
+                    <button onclick="openModal('reset-modal')" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition active:scale-95">
+                        <i class="ph ph-arrow-u-up-left text-base"></i>
+                        <span>Reset</span>
+                    </button>
+                    <button id="theme-toggle-desktop" onclick="toggleTheme()" class="hidden sm:inline-flex p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" aria-label="Toggle Dark Mode">
+                        <i class="ph ph-moon text-lg dark:hidden"></i>
+                        <i class="ph ph-sun text-lg hidden dark:inline-block text-amber-400"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Progress Bar Section -->
+            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span id="status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-50 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-brand-800/60">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+                            <span id="status-text">Ready to pack</span>
+                        </span>
+                        <span id="item-counter" class="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">
+                            0 of 0 items packed
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span id="progress-percentage" class="text-lg sm:text-xl font-extrabold text-brand-600 dark:text-brand-400">0%</span>
+                    </div>
+                </div>
+                <!-- Progress Track -->
+                <div class="w-full h-3 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 shadow-inner">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-brand-500 via-teal-500 to-emerald-500 rounded-full transition-all duration-500 ease-out relative" style="width: 0%">
+                        <div class="absolute inset-0 bg-white/20 w-full h-full animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+
+        <!-- Controls Bar: Filters, Search & Quick Add -->
+        <section class="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-200/80 dark:border-slate-800 mb-6">
+            <div class="flex flex-col lg:flex-row gap-4 justify-between">
+                
+                <!-- Filter Pills -->
+                <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/90 p-1.5 rounded-xl overflow-x-auto no-scrollbar sm:self-start">
+                    <button onclick="setFilter('all')" id="filter-all" class="filter-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap">
+                        <i class="ph ph-squares-four"></i>
+                        <span>All Items</span>
+                        <span id="badge-all" class="px-1.5 py-0.5 text-[11px] rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">0</span>
+                    </button>
+                    <button onclick="setFilter('topack')" id="filter-topack" class="filter-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap">
+                        <i class="ph ph-circle-dashed"></i>
+                        <span>To Pack</span>
+                        <span id="badge-topack" class="px-1.5 py-0.5 text-[11px] rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">0</span>
+                    </button>
+                    <button onclick="setFilter('packed')" id="filter-packed" class="filter-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap">
+                        <i class="ph ph-check-circle"></i>
+                        <span>Packed</span>
+                        <span id="badge-packed" class="px-1.5 py-0.5 text-[11px] rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">0</span>
+                    </button>
+                </div>
+
+                <!-- Search & Global Quick Add -->
+                <div class="flex flex-col sm:flex-row gap-2.5 flex-1 lg:max-w-xl justify-end">
+                    <!-- Search Input -->
+                    <div class="relative flex-1">
+                        <i class="ph ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-base"></i>
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            oninput="handleSearch(this.value)"
+                            placeholder="Search items..." 
+                            class="w-full pl-9 pr-8 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white dark:focus:bg-slate-800 transition"
+                        >
+                        <button id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+                            <i class="ph-fill ph-x-circle"></i>
+                        </button>
+                    </div>
+
+                    <!-- Open New Category / Quick Add Toggle -->
+                    <button onclick="toggleQuickAddBar()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-sm shadow-brand-500/20 transition active:scale-95 whitespace-nowrap">
+                        <i class="ph-bold ph-plus"></i>
+                        <span>Quick Add Item</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Collapsible Global Quick Add Form -->
+            <form id="quick-add-form" onsubmit="handleGlobalAdd(event)" class="hidden mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex-col sm:flex-row gap-3 items-stretch sm:items-center animate-fadeIn">
+                <div class="flex-1">
+                    <label for="global-item-name" class="sr-only">Item Name</label>
+                    <input 
+                        type="text" 
+                        id="global-item-name" 
+                        placeholder="What do you need to pack? (e.g., Polarized Sunglasses)" 
+                        required
+                        class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                </div>
+                <div class="flex gap-2.5">
+                    <div class="w-24">
+                        <label for="global-item-qty" class="sr-only">Quantity</label>
+                        <input 
+                            type="number" 
+                            id="global-item-qty" 
+                            min="1" 
+                            max="99" 
+                            value="1" 
+                            class="w-full px-3 py-2.5 text-sm text-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            title="Quantity"
+                        >
+                    </div>
+                    <div class="flex-1 sm:w-52">
+                        <label for="global-item-category" class="sr-only">Category</label>
+                        <select 
+                            id="global-item-category" 
+                            class="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <button type="submit" class="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold rounded-xl hover:opacity-90 transition">
+                        Add
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Empty State (When search or filter matches 0 items) -->
+        <div id="empty-state" class="hidden bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-slate-200/80 dark:border-slate-800 my-8">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                <i id="empty-state-icon" class="ph ph-magnifying-glass text-3xl"></i>
+            </div>
+            <h3 id="empty-state-title" class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">No matching items found</h3>
+            <p id="empty-state-desc" class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-5">
+                Try adjusting your filter or search query, or add a new custom item to your packing list.
+            </p>
+            <button onclick="resetFiltersAndSearch()" class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300 hover:bg-brand-100 transition">
+                <i class="ph ph-arrows-clockwise"></i>
+                <span>Show All Items</span>
+            </button>
+        </div>
+
+        <!-- Categories Grid -->
+        <div id="categories-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <!-- Categories rendered dynamically via JS -->
+        </div>
+
+    </main>
+
+    <!-- Create New Trip Modal -->
+    <div id="new-trip-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-brand-100 dark:bg-brand-950/80 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-airplane-takeoff text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Create New Trip</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Add a separate packing planner</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('new-trip-modal')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="handleCreateTrip(event)">
+                <div class="mb-4">
+                    <label for="new-trip-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Trip Name & Emoji</label>
+                    <input 
+                        type="text" 
+                        id="new-trip-name" 
+                        required
+                        placeholder="e.g., 🏖️ Hawaii Beach Getaway or 🏔️ Ski Weekend"
+                        class="w-full px-3.5 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
+                    >
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Starting Template</label>
+                    <div class="space-y-2">
+                        <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                            <input type="radio" name="trip-template" value="default" checked class="mt-0.5 accent-brand-600">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Standard Default Checklist</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">6 core categories pre-loaded with 39 travel essentials</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                            <input type="radio" name="trip-template" value="duplicate" class="mt-0.5 accent-brand-600">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Duplicate Current Trip (Unpacked)</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Copies all custom items from your current trip, ready to pack</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                            <input type="radio" name="trip-template" value="blank" class="mt-0.5 accent-brand-600">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Blank Slate</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Empty categories so you can build your list from scratch</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5">
+                    <button type="button" onclick="closeModal('new-trip-modal')" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2 text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition">
+                        Create Trip
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Trip Confirmation Modal -->
+    <div id="delete-trip-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div class="flex items-center gap-3.5 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                    <i class="ph-fill ph-trash text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Delete This Trip?</h3>
+                    <p id="delete-trip-subtitle" class="text-xs text-slate-500 dark:text-slate-400">Remove planner from workspace</p>
+                </div>
+            </div>
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Are you sure you want to permanently delete <span id="delete-trip-name-span" class="font-bold text-slate-900 dark:text-white"></span>? This action cannot be undone.
+            </p>
+            <div class="flex items-center justify-end gap-2.5">
+                <button onclick="closeModal('delete-trip-modal')" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    Cancel
+                </button>
+                <button onclick="confirmDeleteActiveTrip()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition">
+                    Delete Trip
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Uncheck All Confirmation Modal -->
+    <div id="uncheck-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div class="flex items-center gap-3.5 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <i class="ph-fill ph-arrow-counter-clockwise text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Unpack All Items?</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Prepare checklist for a brand new trip</p>
+                </div>
+            </div>
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                This will uncheck all currently packed items while keeping all your custom items and edits intact.
+            </p>
+            <div class="flex items-center justify-end gap-2.5">
+                <button onclick="closeModal('uncheck-modal')" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    Cancel
+                </button>
+                <button onclick="confirmUncheckAll()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition">
+                    Yes, Unpack All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Factory Reset Confirmation Modal -->
+    <div id="reset-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div class="flex items-center gap-3.5 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                    <i class="ph-fill ph-warning-circle text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Reset to Default List?</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Restore original factory categories & items</p>
+                </div>
+            </div>
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Are you sure you want to restore the default packing checklist? Any custom items you added or deleted will be reset.
+            </p>
+            <div class="flex items-center justify-end gap-2.5">
+                <button onclick="closeModal('reset-modal')" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    Cancel
+                </button>
+                <button onclick="confirmFactoryReset()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition">
+                    Reset Everything
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clipboard Sync / Raw JSON Modal -->
+    <div id="sync-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-xl">
+            <div class="flex items-center justify-between gap-3.5 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-brand-100 dark:bg-brand-950/80 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-arrows-left-right text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Workspace & Trip Sync</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Transfer all trips or a single trip between PC & phone</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('sync-modal')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Scope Selector for Export/Copy -->
+            <div class="flex items-center justify-between gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl mb-3">
+                <button type="button" id="sync-scope-all" onclick="setSyncScope('all')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs transition">
+                    All Trips (Workspace)
+                </button>
+                <button type="button" id="sync-scope-current" onclick="setSyncScope('current')" class="flex-1 py-1.5 px-3 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
+                    Current Trip Only
+                </button>
+            </div>
+
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-1.5">
+                    <label for="sync-json-textarea" class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Packing State JSON</label>
+                    <button type="button" onclick="copySyncJSON()" class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                        <i class="ph ph-copy"></i>
+                        <span>Copy to Clipboard</span>
+                    </button>
+                </div>
+                <textarea 
+                    id="sync-json-textarea" 
+                    rows="6" 
+                    spellcheck="false"
+                    placeholder="Paste exported JSON state here to restore..."
+                    class="w-full p-3 text-xs font-mono bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 dark:text-slate-200"
+                ></textarea>
+            </div>
+
+            <!-- Import Mode Option -->
+            <div class="mb-4 flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                <span class="font-medium text-slate-600 dark:text-slate-300">When importing JSON:</span>
+                <select id="import-mode-select" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                    <option value="merge">Add / Merge Trips (Keep Existing)</option>
+                    <option value="replace">Replace Workspace / Current Trip</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button onclick="exportChecklistJSON(currentSyncScope)" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition">
+                        <i class="ph ph-download-simple"></i>
+                        <span>Download .json</span>
+                    </button>
+                    <button onclick="triggerImportJSON()" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition">
+                        <i class="ph ph-upload-simple"></i>
+                        <span>Upload .json</span>
+                    </button>
+                </div>
+                <div class="flex items-center justify-end gap-2 w-full sm:w-auto">
+                    <button onclick="closeModal('sync-modal')" class="px-4 py-2 text-xs sm:text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        Close
+                    </button>
+                    <button onclick="applyPastedSyncJSON()" class="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition">
+                        Load Pasted State
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Install as App / PWA Guide & Diagnostics Modal -->
+    <div id="pwa-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between gap-3.5 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-sky-100 dark:bg-sky-950/80 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-device-mobile-camera text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Install PackList & PWA Status</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Run offline as a native-style app on Desktop, iOS & Android</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('pwa-modal')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Native Install Banner (Visible when beforeinstallprompt is captured) -->
+            <div id="pwa-native-prompt-banner" class="hidden mb-4 p-4 rounded-xl bg-gradient-to-r from-sky-600 to-brand-600 text-white flex items-center justify-between gap-3 shadow-sm">
+                <div>
+                    <div class="text-sm font-bold flex items-center gap-1.5">
+                        <i class="ph-bold ph-sparkle"></i>
+                        <span>One-Click App Install Ready!</span>
+                    </div>
+                    <p class="text-xs text-white/90 mt-0.5">Your browser supports direct standalone installation.</p>
+                </div>
+                <button type="button" onclick="triggerNativeInstallPrompt(this)" class="px-4 py-2 rounded-xl bg-white text-sky-700 text-xs font-extrabold hover:bg-sky-50 transition shrink-0 shadow-xs">
+                    Install Now
+                </button>
+            </div>
+
+            <!-- Live PWA Diagnostics Grid -->
+            <div class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Live PWA & Storage Diagnostics</span>
+                    <button onclick="refreshPwaDiagnostics(true)" class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1">
+                        <i class="ph ph-arrows-clockwise"></i>
+                        <span>Refresh Cache</span>
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-400 font-medium">Network</div>
+                        <div id="diag-network" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-0.5">Checking...</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-400 font-medium">Display Mode</div>
+                        <div id="diag-display" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-0.5">Browser Tab</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-400 font-medium">Offline Cache</div>
+                        <div id="diag-cache" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-0.5">Checking...</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-400 font-medium">Saved Data</div>
+                        <div id="diag-storage" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-0.5">0 KB</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step-by-Step Platform Installation Instructions -->
+            <div class="space-y-3 mb-5">
+                <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Step-by-Step Installation Guide</h4>
+
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="ph-fill ph-desktop text-lg"></i>
+                    </div>
+                    <div class="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                        <div class="font-bold text-slate-900 dark:text-white mb-0.5">Desktop (Chrome, Edge, Brave)</div>
+                        Click the <span class="font-semibold">Install PackList</span> icon in the right side of your address bar, or open the browser menu (<span class="font-mono font-bold">⋮</span> / <span class="font-mono font-bold">⋯</span>) &rarr; <span class="font-semibold">Apps / Cast, save, and share</span> &rarr; <span class="font-semibold">Install page as app</span>.
+                    </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="ph-fill ph-apple-logo text-lg"></i>
+                    </div>
+                    <div class="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                        <div class="font-bold text-slate-900 dark:text-white mb-0.5">iPhone & iPad (Safari)</div>
+                        Tap the <span class="font-semibold">Share</span> button (<i class="ph ph-export"></i>) at the bottom of Safari, scroll down, and tap <span class="font-semibold">Add to Home Screen</span>. Launch it from your home screen for full-screen standalone mode.
+                    </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="ph-fill ph-android-logo text-lg"></i>
+                    </div>
+                    <div class="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                        <div class="font-bold text-slate-900 dark:text-white mb-0.5">Android (Chrome)</div>
+                        Tap the three-dot menu (<span class="font-mono font-bold">⋮</span>) in the top right and select <span class="font-semibold">Add to Home screen</span> or <span class="font-semibold">Install app</span>.
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <span id="diag-sw-status" class="text-[11px] text-slate-400">Service Worker: Initializing...</span>
+                <button onclick="closeModal('pwa-modal')" class="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-3 transition-all duration-300">
+        <div class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm font-medium">
+            <i id="toast-icon" class="ph-fill ph-check-circle text-brand-400 dark:text-brand-600 text-lg"></i>
+            <span id="toast-message">Item added</span>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // DEFAULT INITIAL DATA
+        // ==========================================
+        const WORKSPACE_STORAGE_KEY = 'wanderlust_packing_workspace_v2';
+        const LEGACY_STORAGE_KEY = 'wanderlust_packing_checklist_v1';
+        const THEME_KEY = 'wanderlust_theme_v1';
+        const PWA_CACHE_NAME = 'packlist-pwa-v1';
+        const PWA_EXTERNAL_ASSETS = [
+            'https://cdn.tailwindcss.com',
+            'https://unpkg.com/@phosphor-icons/web',
+            'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
+        ];
+
+        let deferredInstallPrompt = null;
+        let pwaSwStatusText = 'Local Cache Active';
+
+        const DEFAULT_CATEGORIES = [
+            {
+                id: 'clothing',
+                name: 'Clothing & Apparel',
+                icon: 'ph-t-shirt',
+                accent: 'indigo',
+                items: [
+                    { id: 'c1', text: 'T-Shirts & Casual Tops', qty: 5, packed: false },
+                    { id: 'c2', text: 'Underwear & Socks', qty: 7, packed: false },
+                    { id: 'c3', text: 'Shorts / Pants / Jeans', qty: 3, packed: false },
+                    { id: 'c4', text: 'Sleepwear / Pajamas', qty: 2, packed: false },
+                    { id: 'c5', text: 'Light Jacket or Hoodie', qty: 1, packed: false },
+                    { id: 'c6', text: 'Comfortable Walking Shoes', qty: 1, packed: false },
+                    { id: 'c7', text: 'Evening / Dinner Outfit', qty: 1, packed: false }
+                ]
+            },
+            {
+                id: 'toiletries',
+                name: 'Toiletries & Grooming',
+                icon: 'ph-drop',
+                accent: 'cyan',
+                items: [
+                    { id: 't1', text: 'Toothbrush, Toothpaste & Floss', qty: 1, packed: false },
+                    { id: 't2', text: 'Deodorant', qty: 1, packed: false },
+                    { id: 't3', text: 'Sunscreen (SPF 30+)', qty: 1, packed: false },
+                    { id: 't4', text: 'Shampoo & Body Wash (Travel Size)', qty: 1, packed: false },
+                    { id: 't5', text: 'Razor & Shaving Cream', qty: 1, packed: false },
+                    { id: 't6', text: 'Hairbrush / Comb & Styling Ties', qty: 1, packed: false },
+                    { id: 't7', text: 'Lip Balm & Moisturizer', qty: 1, packed: false },
+                    { id: 't8', text: 'First-Aid Kit & Personal Meds', qty: 1, packed: false }
+                ]
+            },
+            {
+                id: 'electronics',
+                name: 'Electronics & Tech',
+                icon: 'ph-plug-charging',
+                accent: 'amber',
+                items: [
+                    { id: 'e1', text: 'Smartphone & Charging Cable', qty: 1, packed: false },
+                    { id: 'e2', text: 'Portable Power Bank', qty: 1, packed: false },
+                    { id: 'e3', text: 'Noise-Canceling Headphones / Earbuds', qty: 1, packed: false },
+                    { id: 'e4', text: 'Universal Travel Adapter', qty: 1, packed: false },
+                    { id: 'e5', text: 'Laptop / Tablet & Charger', qty: 1, packed: false },
+                    { id: 'e6', text: 'Camera & Extra SD Card', qty: 1, packed: false }
+                ]
+            },
+            {
+                id: 'documents',
+                name: 'Travel Documents & Wallet',
+                icon: 'ph-identification-card',
+                accent: 'emerald',
+                items: [
+                    { id: 'd1', text: 'Passport / Government ID', qty: 1, packed: false },
+                    { id: 'd2', text: 'Boarding Passes & Tickets', qty: 1, packed: false },
+                    { id: 'd3', text: 'Credit & Debit Cards (No Foreign Fee)', qty: 2, packed: false },
+                    { id: 'd4', text: 'Local Currency / Emergency Cash', qty: 1, packed: false },
+                    { id: 'd5', text: 'Health & Travel Insurance Card', qty: 1, packed: false },
+                    { id: 'd6', text: 'Hotel & Rental Car Confirmations', qty: 1, packed: false }
+                ]
+            },
+            {
+                id: 'fitness',
+                name: 'Fitness & Outdoor Gear',
+                icon: 'ph-person-simple-run',
+                accent: 'rose',
+                items: [
+                    { id: 'f1', text: 'Swimsuit / Swim Trunks', qty: 2, packed: false },
+                    { id: 'f2', text: 'Activewear / Gym Clothes', qty: 2, packed: false },
+                    { id: 'f3', text: 'Running / Trail Shoes', qty: 1, packed: false },
+                    { id: 'f4', text: 'Reusable Insulated Water Bottle', qty: 1, packed: false },
+                    { id: 'f5', text: 'Sunglasses & Sun Hat', qty: 1, packed: false },
+                    { id: 'f6', text: 'Quick-Dry Microfiber Towel', qty: 1, packed: false }
+                ]
+            },
+            {
+                id: 'miscellaneous',
+                name: 'Miscellaneous Essentials',
+                icon: 'ph-backpack',
+                accent: 'purple',
+                items: [
+                    { id: 'm1', text: 'Daypack / Foldable Tote Bag', qty: 1, packed: false },
+                    { id: 'm2', text: 'Travel Pillow, Eye Mask & Earplugs', qty: 1, packed: false },
+                    { id: 'm3', text: 'Laundry Bag for Dirty Clothes', qty: 1, packed: false },
+                    { id: 'm4', text: 'Compact Travel Umbrella', qty: 1, packed: false },
+                    { id: 'm5', text: 'Book / Kindle & Travel Snacks', qty: 1, packed: false },
+                    { id: 'm6', text: 'Luggage Tags & TSA Lock', qty: 1, packed: false }
+                ]
+            }
+        ];
+
+        // Color mapping for category accents
+        const ACCENT_STYLES = {
+            indigo: {
+                iconBg: 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400',
+                bar: 'bg-indigo-500',
+                badge: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+            },
+            cyan: {
+                iconBg: 'bg-cyan-100 dark:bg-cyan-950/80 text-cyan-600 dark:text-cyan-400',
+                bar: 'bg-cyan-500',
+                badge: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300'
+            },
+            amber: {
+                iconBg: 'bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400',
+                bar: 'bg-amber-500',
+                badge: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+            },
+            emerald: {
+                iconBg: 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400',
+                bar: 'bg-emerald-500',
+                badge: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+            },
+            rose: {
+                iconBg: 'bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400',
+                bar: 'bg-rose-500',
+                badge: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+            },
+            purple: {
+                iconBg: 'bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400',
+                bar: 'bg-purple-500',
+                badge: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+            }
+        };
+
+        // ==========================================
+        // APPLICATION STATE (MULTI-TRIP WORKSPACE)
+        // ==========================================
+        let appState = {
+            trips: [],
+            activeTripId: null,
+            filter: 'all', // 'all' | 'topack' | 'packed'
+            searchQuery: ''
+        };
+
+        let currentSyncScope = 'all'; // 'all' | 'current'
+
+        function getActiveTrip() {
+            let trip = appState.trips.find(t => t.id === appState.activeTripId);
+            if (!trip && appState.trips.length > 0) {
+                appState.activeTripId = appState.trips[0].id;
+                trip = appState.trips[0];
+            }
+            return trip;
+        }
+
+        function createTripObject(title, categoriesTemplate = 'default', sourceCategories = null) {
+            let categories;
+            if (categoriesTemplate === 'duplicate' && Array.isArray(sourceCategories)) {
+                categories = JSON.parse(JSON.stringify(sourceCategories));
+                categories.forEach(cat => cat.items.forEach(item => item.packed = false));
+            } else if (categoriesTemplate === 'blank') {
+                categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+                categories.forEach(cat => cat.items = []);
+            } else {
+                categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+            }
+
+            return {
+                id: 'trip_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                title: title || 'Ultimate Vacation Pack',
+                createdAt: new Date().toISOString(),
+                categories: categories
+            };
+        }
+
+        // ==========================================
+        // INITIALIZATION & PERSISTENCE
+        // ==========================================
+        function initApp() {
+            loadTheme();
+            loadState();
+            populateGlobalCategoryDropdown();
+            setupTripTitleListener();
+            setupGlobalClickDismiss();
+            initPWA();
+            renderAll();
+        }
+
+        // ==========================================
+        // PROGRESSIVE WEB APP (PWA) ARCHITECTURE
+        // ==========================================
+        function generateAppIconSVG() {
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <defs>
+                    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#0284c7"/>
+                        <stop offset="50%" stop-color="#0d9488"/>
+                        <stop offset="100%" stop-color="#059669"/>
+                    </linearGradient>
+                </defs>
+                <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+                <path d="M196 128V96c0-17.7 14.3-32 32-32h56c17.7 0 32 14.3 32 32v32" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round"/>
+                <rect x="104" y="128" width="304" height="272" rx="44" fill="#ffffff"/>
+                <path d="M196 264l42 42 86-86" fill="none" stroke="#0d9488" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="168" cy="428" r="20" fill="#ffffff"/>
+                <circle cx="344" cy="428" r="20" fill="#ffffff"/>
+            </svg>`;
+        }
+
+        function createPngIconDataUrl(size, svgString) {
+            return new Promise((resolve) => {
+                try {
+                    const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = size;
+                        canvas.height = size;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, size, size);
+                        resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.onerror = () => resolve(svgDataUrl);
+                    img.src = svgDataUrl;
+                } catch (e) {
+                    resolve('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString));
+                }
+            });
+        }
+
+        const supportsWebInstall = typeof Navigator !== 'undefined' && typeof Navigator.prototype.install === 'function';
+
+        function isStandaloneDisplay() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
+
+        async function initPWA() {
+            // Fallback for opening directly via file:// without a local HTTP server
+            if (!window.location.protocol.startsWith('http')) {
+                const svgString = generateAppIconSVG();
+                const svgDataUri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+                const faviconEl = document.getElementById('pwa-favicon');
+                if (faviconEl) faviconEl.href = svgDataUri;
+
+                const icon192 = await createPngIconDataUrl(192, svgString);
+                const appleIconEl = document.getElementById('pwa-apple-icon');
+                if (appleIconEl) appleIconEl.href = icon192;
+            }
+
+            // 1. Connectivity Listeners
+            window.addEventListener('online', updateConnectivityUI);
+            window.addEventListener('offline', () => {
+                updateConnectivityUI();
+                showToast('Offline Mode: Changes saved locally on device');
+            });
+            updateConnectivityUI();
+
+            // 2. Native Web Install API / beforeinstallprompt fallback
+            if (supportsWebInstall && !isStandaloneDisplay()) {
+                const banner = document.getElementById('pwa-native-prompt-banner');
+                if (banner) banner.classList.remove('hidden');
+            }
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredInstallPrompt = e;
+                const installBtnText = document.getElementById('install-app-btn-text');
+                if (installBtnText) installBtnText.textContent = '📲 Install App';
+                if (!supportsWebInstall) {
+                    const banner = document.getElementById('pwa-native-prompt-banner');
+                    if (banner) banner.classList.remove('hidden');
+                }
+            });
+
+            window.addEventListener('appinstalled', () => {
+                deferredInstallPrompt = null;
+                const banner = document.getElementById('pwa-native-prompt-banner');
+                if (banner) banner.classList.add('hidden');
+                showToast('PackList installed as a standalone app!');
+                refreshPwaDiagnostics();
+            });
+
+            // 3. Register static Service Worker & warm up Cache Storage API
+            await registerServiceWorker();
+            await warmUpOfflineCache();
+            refreshPwaDiagnostics();
+        }
+
+        async function warmUpOfflineCache() {
+            if (!('caches' in window) || !window.location.protocol.startsWith('http')) return false;
+            try {
+                const cache = await caches.open(PWA_CACHE_NAME);
+                const coreLocalAssets = [
+                    './',
+                    './index.html',
+                    './manifest.json',
+                    './icons/icon.svg',
+                    './icons/icon-192.png',
+                    './icons/icon-512.png',
+                    './icons/icon-maskable-512.png',
+                    './icons/apple-touch-icon.png'
+                ];
+
+                await Promise.allSettled(
+                    coreLocalAssets.map(async (assetUrl) => {
+                        const existing = await cache.match(assetUrl);
+                        if (!existing) {
+                            const res = await fetch(assetUrl);
+                            if (res && res.ok) {
+                                await cache.put(assetUrl, res);
+                            }
+                        }
+                    })
+                );
+
+                // Pre-cache external CDN assets so offline reloads stay styled
+                await Promise.allSettled(
+                    PWA_EXTERNAL_ASSETS.map(async (url) => {
+                        const existing = await cache.match(url);
+                        if (!existing) {
+                            try {
+                                const res = await fetch(url);
+                                if (res && res.ok) {
+                                    await cache.put(url, res);
+                                    return;
+                                }
+                            } catch (e) {}
+                            const req = new Request(url, { mode: 'no-cors' });
+                            const res = await fetch(req);
+                            if (res) {
+                                await cache.put(req, res);
+                            }
+                        }
+                    })
+                );
+                return true;
+            } catch (err) {
+                console.warn('Cache Storage warm-up skipped in this context:', err);
+                return false;
+            }
+        }
+
+        async function registerServiceWorker() {
+            if (!('serviceWorker' in navigator)) {
+                pwaSwStatusText = 'Service Worker: Not supported in this browser (LocalStorage active)';
+                return;
+            }
+
+            if (!window.location.protocol.startsWith('http')) {
+                pwaSwStatusText = 'Service Worker: Running via local file (serve over HTTPS/localhost for SW)';
+                return;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+                if (registration.active) {
+                    pwaSwStatusText = 'Service Worker: Active & Intercepting Offline Requests';
+                } else if (registration.installing || registration.waiting) {
+                    pwaSwStatusText = 'Service Worker: Installing Offline Cache...';
+                }
+                navigator.serviceWorker.ready.then(() => {
+                    pwaSwStatusText = 'Service Worker: Active & Intercepting Offline Requests';
+                    refreshPwaDiagnostics();
+                });
+            } catch (err) {
+                console.warn('Service Worker registration failed:', err);
+                pwaSwStatusText = 'Service Worker: Direct Cache Storage API + LocalStorage Persistence Active';
+            }
+        }
+
+        function updateConnectivityUI() {
+            const isOnline = navigator.onLine;
+            const pill = document.getElementById('connectivity-pill');
+            const dot = document.getElementById('connectivity-dot');
+            const text = document.getElementById('connectivity-text');
+            const shortText = document.getElementById('connectivity-text-short');
+
+            if (!pill || !dot || !text) return;
+
+            if (isOnline) {
+                pill.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition whitespace-nowrap';
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                text.textContent = 'Online • PWA Ready';
+                if (shortText) shortText.textContent = 'Online';
+            } else {
+                pill.className = 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60 hover:bg-amber-100 transition whitespace-nowrap';
+                dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+                text.textContent = 'Offline Mode (Saved Locally)';
+                if (shortText) shortText.textContent = 'Offline';
+            }
+        }
+
+        function handleInstallClick(buttonEl) {
+            if (supportsWebInstall || deferredInstallPrompt) {
+                triggerNativeInstallPrompt(buttonEl || document.getElementById('install-app-btn'));
+            } else {
+                openPwaModal();
+            }
+        }
+
+        async function triggerNativeInstallPrompt(buttonEl) {
+            const btn = buttonEl || document.getElementById('install-app-btn');
+            if (btn && btn.getAttribute('aria-disabled') === 'true') return;
+
+            if (!supportsWebInstall && !deferredInstallPrompt) {
+                openPwaModal();
+                return;
+            }
+
+            if (btn) btn.setAttribute('aria-disabled', 'true');
+            try {
+                if (supportsWebInstall) {
+                    await navigator.install();
+                    showToast('PackList installed or opened!');
+                    const banner = document.getElementById('pwa-native-prompt-banner');
+                    if (banner) banner.classList.add('hidden');
+                } else if (deferredInstallPrompt) {
+                    const promptEvent = deferredInstallPrompt;
+                    deferredInstallPrompt = null;
+                    await promptEvent.prompt();
+                    const { outcome } = await promptEvent.userChoice;
+                    if (outcome === 'accepted') {
+                        showToast('Installing PackList App...');
+                    }
+                    if (!deferredInstallPrompt) {
+                        const banner = document.getElementById('pwa-native-prompt-banner');
+                        if (banner) banner.classList.add('hidden');
+                    }
+                }
+            } catch (e) {
+                if (e && e.name === 'AbortError') {
+                    showToast('Installation was canceled');
+                } else {
+                    console.error('Install prompt error:', e);
+                    openPwaModal();
+                }
+            } finally {
+                if (btn) btn.removeAttribute('aria-disabled');
+            }
+        }
+
+        function openPwaModal() {
+            refreshPwaDiagnostics(false);
+            openModal('pwa-modal');
+        }
+
+        async function refreshPwaDiagnostics(reWarm = false) {
+            if (reWarm) {
+                await warmUpOfflineCache();
+                showToast('Offline PWA cache refreshed');
+            }
+
+            const netEl = document.getElementById('diag-network');
+            const dispEl = document.getElementById('diag-display');
+            const cacheEl = document.getElementById('diag-cache');
+            const storageEl = document.getElementById('diag-storage');
+            const swEl = document.getElementById('diag-sw-status');
+
+            if (netEl) {
+                netEl.textContent = navigator.onLine ? 'Online (Synced)' : 'Offline Mode';
+                netEl.className = `text-xs font-bold mt-0.5 ${navigator.onLine ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`;
+            }
+
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (dispEl) {
+                dispEl.textContent = isStandalone ? 'Standalone App' : 'Browser Window';
+            }
+
+            if (cacheEl) {
+                if ('caches' in window) {
+                    try {
+                        const cache = await caches.open(PWA_CACHE_NAME);
+                        const keys = await cache.keys();
+                        cacheEl.textContent = `${keys.length} Assets Cached`;
+                    } catch (e) {
+                        cacheEl.textContent = 'Local Ready';
+                    }
+                } else {
+                    cacheEl.textContent = 'LocalStorage Ready';
+                }
+            }
+
+            if (storageEl) {
+                try {
+                    const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY) || '';
+                    const kb = Math.max(1, (new Blob([raw]).size / 1024).toFixed(1));
+                    storageEl.textContent = `${kb} KB (${appState.trips.length} ${appState.trips.length === 1 ? 'Trip' : 'Trips'})`;
+                } catch (e) {
+                    storageEl.textContent = 'Active';
+                }
+            }
+
+            if (swEl) {
+                swEl.textContent = pwaSwStatusText;
+            }
+        }
+
+        function loadTheme() {
+            try {
+                const savedTheme = localStorage.getItem(THEME_KEY);
+                if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch (e) {
+                console.error('Unable to access theme preference:', e);
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            try {
+                localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+            } catch (e) {
+                console.error('Unable to save theme:', e);
+            }
+        }
+
+        function normalizeCategoryIcons(categories) {
+            if (!Array.isArray(categories)) return;
+            categories.forEach(cat => {
+                if (cat && cat.icon === 'ph-Identification-card') {
+                    cat.icon = 'ph-identification-card';
+                }
+            });
+        }
+
+        function loadState() {
+            try {
+                // 1. Check for Multi-Trip Workspace v2
+                const rawWorkspace = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+                if (rawWorkspace) {
+                    const parsed = JSON.parse(rawWorkspace);
+                    if (parsed && Array.isArray(parsed.trips) && parsed.trips.length > 0) {
+                        parsed.trips.forEach(t => normalizeCategoryIcons(t.categories));
+                        appState.trips = parsed.trips;
+                        appState.activeTripId = parsed.activeTripId || parsed.trips[0].id;
+                        syncActiveTripHeader();
+                        return;
+                    }
+                }
+
+                // 2. Check and migrate Legacy Single-Trip v1
+                const rawLegacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+                if (rawLegacy) {
+                    const legacyParsed = JSON.parse(rawLegacy);
+                    if (legacyParsed && Array.isArray(legacyParsed.categories)) {
+                        normalizeCategoryIcons(legacyParsed.categories);
+                        const migratedTrip = {
+                            id: 'trip_migrated_' + Date.now(),
+                            title: legacyParsed.tripTitle || 'Ultimate Vacation Pack',
+                            createdAt: new Date().toISOString(),
+                            categories: legacyParsed.categories
+                        };
+                        appState.trips = [migratedTrip];
+                        appState.activeTripId = migratedTrip.id;
+                        saveState();
+                        syncActiveTripHeader();
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to read localStorage:', e);
+            }
+
+            // 3. Fallback: Initialize with 2 helpful sample trips
+            const defaultTrip = createTripObject('🏖️ Summer Beach Getaway', 'default');
+            appState.trips = [defaultTrip];
+            appState.activeTripId = defaultTrip.id;
+            saveState();
+            syncActiveTripHeader();
+        }
+
+        function saveState() {
+            try {
+                const payload = {
+                    activeTripId: appState.activeTripId,
+                    trips: appState.trips
+                };
+                localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(payload));
+            } catch (e) {
+                console.error('Failed to save state to localStorage:', e);
+            }
+        }
+
+        function syncActiveTripHeader() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            document.getElementById('trip-title').textContent = activeTrip.title;
+            const subtitle = document.getElementById('trip-meta-subtitle');
+            if (subtitle) {
+                subtitle.textContent = `Planner ${appState.trips.indexOf(activeTrip) + 1} of ${appState.trips.length} • Click title to rename`;
+            }
+        }
+
+        function setupTripTitleListener() {
+            const titleEl = document.getElementById('trip-title');
+            titleEl.addEventListener('blur', () => {
+                const activeTrip = getActiveTrip();
+                if (!activeTrip) return;
+                const cleaned = titleEl.textContent.trim() || 'Untitled Trip';
+                titleEl.textContent = cleaned;
+                activeTrip.title = cleaned;
+                saveState();
+                renderTripTabs();
+            });
+            titleEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    titleEl.blur();
+                }
+            });
+        }
+
+        function setupGlobalClickDismiss() {
+            window.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('export-dropdown');
+                if (dropdown && !dropdown.classList.contains('hidden')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        function toggleExportMenu(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('export-dropdown');
+            dropdown.classList.toggle('hidden');
+        }
+
+        function populateGlobalCategoryDropdown() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const select = document.getElementById('global-item-category');
+            select.innerHTML = activeTrip.categories.map(cat => 
+                `<option value="${cat.id}">${escapeHtml(cat.name)}</option>`
+            ).join('');
+        }
+
+        // ==========================================
+        // MULTI-TRIP MANAGEMENT ACTIONS
+        // ==========================================
+        function getTripStats(trip) {
+            let total = 0;
+            let packed = 0;
+            trip.categories.forEach(c => {
+                c.items.forEach(i => {
+                    total++;
+                    if (i.packed) packed++;
+                });
+            });
+            const pct = total === 0 ? 0 : Math.round((packed / total) * 100);
+            return { total, packed, pct };
+        }
+
+        function renderTripTabs() {
+            const container = document.getElementById('trip-tabs-container');
+            if (!container) return;
+
+            container.innerHTML = appState.trips.map(trip => {
+                const isActive = trip.id === appState.activeTripId;
+                const stats = getTripStats(trip);
+
+                if (isActive) {
+                    return `
+                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs transition shrink-0">
+                            <span class="truncate max-w-[160px]">${escapeHtml(trip.title)}</span>
+                            <span class="px-1.5 py-0.5 text-[10px] rounded-md ${stats.pct === 100 && stats.total > 0 ? 'bg-emerald-500 text-white' : 'bg-white/20 dark:bg-slate-900/15'}">
+                                ${stats.pct}%
+                            </span>
+                        </button>
+                    `;
+                } else {
+                    return `
+                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition shrink-0">
+                            <span class="truncate max-w-[140px]">${escapeHtml(trip.title)}</span>
+                            <span class="px-1.5 py-0.5 text-[10px] rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                ${stats.pct}%
+                            </span>
+                        </button>
+                    `;
+                }
+            }).join('');
+        }
+
+        function switchTrip(tripId) {
+            if (appState.activeTripId === tripId) return;
+            const target = appState.trips.find(t => t.id === tripId);
+            if (!target) return;
+
+            appState.activeTripId = tripId;
+            saveState();
+            syncActiveTripHeader();
+            populateGlobalCategoryDropdown();
+            renderAll();
+        }
+
+        function openNewTripModal() {
+            const input = document.getElementById('new-trip-name');
+            input.value = '';
+            openModal('new-trip-modal');
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function handleCreateTrip(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('new-trip-name');
+            const title = nameInput.value.trim() || 'New Adventure';
+            const selectedTemplate = document.querySelector('input[name="trip-template"]:checked')?.value || 'default';
+
+            const activeTrip = getActiveTrip();
+            const newTrip = createTripObject(
+                title,
+                selectedTemplate,
+                activeTrip ? activeTrip.categories : null
+            );
+
+            appState.trips.push(newTrip);
+            appState.activeTripId = newTrip.id;
+            saveState();
+            syncActiveTripHeader();
+            populateGlobalCategoryDropdown();
+            renderAll();
+            closeModal('new-trip-modal');
+            showToast(`Created trip "${title}"`);
+        }
+
+        function duplicateActiveTrip() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            const copyTitle = `${activeTrip.title} (Copy)`;
+            const duplicated = {
+                id: 'trip_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                title: copyTitle,
+                createdAt: new Date().toISOString(),
+                categories: JSON.parse(JSON.stringify(activeTrip.categories))
+            };
+
+            appState.trips.push(duplicated);
+            appState.activeTripId = duplicated.id;
+            saveState();
+            syncActiveTripHeader();
+            populateGlobalCategoryDropdown();
+            renderAll();
+            showToast(`Duplicated "${activeTrip.title}"`);
+        }
+
+        function openDeleteTripModal() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            document.getElementById('delete-trip-name-span').textContent = `"${activeTrip.title}"`;
+            const sub = document.getElementById('delete-trip-subtitle');
+            if (appState.trips.length === 1) {
+                sub.textContent = 'This is your only trip—deleting it will create a fresh default planner';
+            } else {
+                sub.textContent = `You have ${appState.trips.length} trips in your workspace`;
+            }
+            openModal('delete-trip-modal');
+        }
+
+        function confirmDeleteActiveTrip() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            const deletedName = activeTrip.title;
+            appState.trips = appState.trips.filter(t => t.id !== activeTrip.id);
+
+            if (appState.trips.length === 0) {
+                const fallback = createTripObject('🏖️ Ultimate Vacation Pack', 'default');
+                appState.trips = [fallback];
+            }
+
+            appState.activeTripId = appState.trips[0].id;
+            saveState();
+            syncActiveTripHeader();
+            populateGlobalCategoryDropdown();
+            renderAll();
+            closeModal('delete-trip-modal');
+            showToast(`Deleted "${deletedName}"`);
+        }
+
+        // ==========================================
+        // CORE RENDERING & PROGRESS CALCULATION
+        // ==========================================
+        function renderAll() {
+            syncActiveTripHeader();
+            renderTripTabs();
+            updateOverallProgress();
+            updateFilterButtons();
+            renderCategories();
+        }
+
+        function updateOverallProgress() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            let totalItems = 0;
+            let packedItems = 0;
+
+            activeTrip.categories.forEach(cat => {
+                cat.items.forEach(item => {
+                    totalItems++;
+                    if (item.packed) packedItems++;
+                });
+            });
+
+            const pct = totalItems === 0 ? 0 : Math.round((packedItems / totalItems) * 100);
+            const remaining = totalItems - packedItems;
+
+            // Update DOM elements
+            document.getElementById('progress-percentage').textContent = `${pct}%`;
+            document.getElementById('progress-bar').style.width = `${pct}%`;
+            document.getElementById('item-counter').textContent = `${packedItems} of ${totalItems} items packed`;
+
+            // Update filter count badges
+            document.getElementById('badge-all').textContent = totalItems;
+            document.getElementById('badge-topack').textContent = remaining;
+            document.getElementById('badge-packed').textContent = packedItems;
+
+            // Update dynamic status badge
+            const statusText = document.getElementById('status-text');
+            const statusBadge = document.getElementById('status-badge');
+
+            if (totalItems === 0) {
+                statusText.textContent = 'List is empty';
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
+            } else if (pct === 0) {
+                statusText.textContent = 'Ready to pack';
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+            } else if (pct < 50) {
+                statusText.textContent = 'Packing in progress';
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60';
+            } else if (pct < 100) {
+                statusText.textContent = 'Almost ready!';
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-50 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 border border-brand-200/60 dark:border-brand-800/60';
+            } else {
+                statusText.textContent = '100% All Packed & Ready!';
+                statusBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700';
+            }
+        }
+
+        function updateFilterButtons() {
+            const filters = ['all', 'topack', 'packed'];
+            filters.forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (appState.filter === f) {
+                    btn.className = 'filter-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs';
+                } else {
+                    btn.className = 'filter-btn flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+                }
+            });
+        }
+
+        function renderCategories() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            const grid = document.getElementById('categories-grid');
+            const emptyState = document.getElementById('empty-state');
+            const query = appState.searchQuery.toLowerCase().trim();
+
+            let visibleItemsTotal = 0;
+            let html = '';
+
+            activeTrip.categories.forEach(cat => {
+                const totalCatItems = cat.items.length;
+                const packedCatItems = cat.items.filter(i => i.packed).length;
+                const catPct = totalCatItems === 0 ? 0 : Math.round((packedCatItems / totalCatItems) * 100);
+                const style = ACCENT_STYLES[cat.accent] || ACCENT_STYLES.indigo;
+
+                // Filter items based on active filter & search query
+                const filteredItems = cat.items.filter(item => {
+                    const matchesFilter = 
+                        appState.filter === 'all' ||
+                        (appState.filter === 'packed' && item.packed) ||
+                        (appState.filter === 'topack' && !item.packed);
+                    
+                    const matchesSearch = !query || item.text.toLowerCase().includes(query) || cat.name.toLowerCase().includes(query);
+                    return matchesFilter && matchesSearch;
+                });
+
+                visibleItemsTotal += filteredItems.length;
+
+                // If searching or filtering and this category has 0 matching items, hide the card only when searching
+                if (query && filteredItems.length === 0) {
+                    return;
+                }
+
+                const allCheckedInCat = totalCatItems > 0 && packedCatItems === totalCatItems;
+
+                html += `
+                <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col transition-all hover:border-slate-300 dark:hover:border-slate-700">
+                    <!-- Category Header -->
+                    <div class="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80">
+                        <div class="flex items-center justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl ${style.iconBg} flex items-center justify-center shrink-0">
+                                    <i class="ph-fill ${cat.icon} text-xl"></i>
+                                </div>
+                                <div>
+                                    <h2 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-snug">
+                                        ${escapeHtml(cat.name)}
+                                    </h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                                        ${packedCatItems} of ${totalCatItems} packed (${catPct}%)
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Category Quick Toggle All -->
+                            ${totalCatItems > 0 ? `
+                            <button 
+                                onclick="toggleCategoryAll('${cat.id}')"
+                                class="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-950/60 dark:hover:text-brand-400 transition"
+                                title="${allCheckedInCat ? 'Uncheck all in category' : 'Check all in category'}"
+                            >
+                                ${allCheckedInCat ? 'Unpack All' : 'Pack All'}
+                            </button>
+                            ` : ''}
+                        </div>
+
+                        <!-- Mini Category Progress Bar -->
+                        <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full ${style.bar} transition-all duration-300 rounded-full" style="width: ${catPct}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Category Items List -->
+                    <div class="divide-y divide-slate-100 dark:divide-slate-800/60 flex-1 max-h-96 overflow-y-auto">
+                        ${filteredItems.length > 0 ? filteredItems.map(item => `
+                            <div class="group flex items-center justify-between gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                                <label class="custom-checkbox flex items-center gap-3.5 flex-1 cursor-pointer select-none min-w-0">
+                                    <input 
+                                        type="checkbox" 
+                                        class="sr-only" 
+                                        ${item.packed ? 'checked' : ''} 
+                                        onchange="toggleItem('${cat.id}', '${item.id}')"
+                                    >
+                                    <div class="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors shrink-0 group-hover:border-brand-500">
+                                        <svg class="w-3.5 h-3.5 text-white pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm font-medium truncate ${item.packed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'}">
+                                        ${escapeHtml(item.text)}
+                                    </span>
+                                </label>
+
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <!-- Quantity Controls -->
+                                    <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                                        <button 
+                                            onclick="changeItemQty('${cat.id}', '${item.id}', -1)" 
+                                            class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition text-xs"
+                                            title="Decrease quantity"
+                                        >
+                                            <i class="ph-bold ph-minus"></i>
+                                        </button>
+                                        <span class="text-xs font-semibold px-1.5 min-w-[26px] text-center text-slate-600 dark:text-slate-300">
+                                            ${item.qty > 1 ? `×${item.qty}` : '1'}
+                                        </span>
+                                        <button 
+                                            onclick="changeItemQty('${cat.id}', '${item.id}', 1)" 
+                                            class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 transition text-xs"
+                                            title="Increase quantity"
+                                        >
+                                            <i class="ph-bold ph-plus"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Delete Item Button -->
+                                    <button 
+                                        onclick="deleteItem('${cat.id}', '${item.id}')" 
+                                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition opacity-80 sm:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        aria-label="Delete ${escapeHtml(item.text)}"
+                                        title="Delete item"
+                                    >
+                                        <i class="ph ph-trash text-base"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('') : `
+                            <div class="py-8 px-4 text-center">
+                                <p class="text-xs text-slate-400 dark:text-slate-500 italic">
+                                    ${appState.filter === 'packed' ? 'No items packed in this category yet.' : 
+                                      appState.filter === 'topack' && totalCatItems > 0 ? 'All items in this category are packed!' : 
+                                      'No items in this category yet.'}
+                                </p>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Inline Add Custom Item Footer -->
+                    <form onsubmit="handleInlineAdd(event, '${cat.id}')" class="p-3 bg-slate-50/70 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
+                        <input 
+                            type="text" 
+                            id="input-${cat.id}"
+                            placeholder="Add item to ${escapeHtml(cat.name.split(' ')[0])}..." 
+                            required
+                            class="flex-1 px-3 py-2 text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+                        >
+                        <input 
+                            type="number" 
+                            id="qty-${cat.id}"
+                            min="1" 
+                            max="99" 
+                            value="1" 
+                            title="Quantity"
+                            class="w-14 px-2 py-2 text-xs sm:text-sm text-center bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+                        >
+                        <button 
+                            type="submit" 
+                            class="p-2 sm:px-3 sm:py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1 shrink-0 active:scale-95"
+                            title="Add custom item"
+                        >
+                            <i class="ph-bold ph-plus"></i>
+                            <span class="hidden sm:inline">Add</span>
+                        </button>
+                    </form>
+                </section>
+                `;
+            });
+
+            grid.innerHTML = html;
+
+            // Toggle Empty State if no items match search
+            if (query && visibleItemsTotal === 0) {
+                emptyState.classList.remove('hidden');
+                grid.classList.add('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                grid.classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // USER INTERACTIONS & ITEM ACTIONS
+        // ==========================================
+        function toggleItem(catId, itemId) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const cat = activeTrip.categories.find(c => c.id === catId);
+            if (!cat) return;
+            const item = cat.items.find(i => i.id === itemId);
+            if (!item) return;
+
+            item.packed = !item.packed;
+            saveState();
+            renderAll();
+        }
+
+        function toggleCategoryAll(catId) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const cat = activeTrip.categories.find(c => c.id === catId);
+            if (!cat || cat.items.length === 0) return;
+
+            const allPacked = cat.items.every(i => i.packed);
+            cat.items.forEach(i => i.packed = !allPacked);
+
+            saveState();
+            renderAll();
+            showToast(allPacked ? `Unpacked ${cat.name}` : `Packed all in ${cat.name}`);
+        }
+
+        function changeItemQty(catId, itemId, delta) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const cat = activeTrip.categories.find(c => c.id === catId);
+            if (!cat) return;
+            const item = cat.items.find(i => i.id === itemId);
+            if (!item) return;
+
+            const newQty = (item.qty || 1) + delta;
+            if (newQty >= 1 && newQty <= 99) {
+                item.qty = newQty;
+                saveState();
+                renderAll();
+            }
+        }
+
+        function deleteItem(catId, itemId) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const cat = activeTrip.categories.find(c => c.id === catId);
+            if (!cat) return;
+            const idx = cat.items.findIndex(i => i.id === itemId);
+            if (idx === -1) return;
+
+            const removedName = cat.items[idx].text;
+            cat.items.splice(idx, 1);
+            saveState();
+            renderAll();
+            showToast(`Removed "${removedName}"`);
+        }
+
+        function handleInlineAdd(event, catId) {
+            event.preventDefault();
+            const textInput = document.getElementById(`input-${catId}`);
+            const qtyInput = document.getElementById(`qty-${catId}`);
+
+            const text = textInput.value.trim();
+            const qty = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
+
+            if (!text) return;
+
+            addCustomItemToCategory(catId, text, qty);
+            textInput.value = '';
+            qtyInput.value = '1';
+        }
+
+        function handleGlobalAdd(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('global-item-name');
+            const qtyInput = document.getElementById('global-item-qty');
+            const catSelect = document.getElementById('global-item-category');
+
+            const text = nameInput.value.trim();
+            const qty = Math.max(1, Math.min(99, parseInt(qtyInput.value, 10) || 1));
+            const catId = catSelect.value;
+
+            if (!text || !catId) return;
+
+            addCustomItemToCategory(catId, text, qty);
+            nameInput.value = '';
+            qtyInput.value = '1';
+        }
+
+        function addCustomItemToCategory(catId, text, qty) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+            const cat = activeTrip.categories.find(c => c.id === catId);
+            if (!cat) return;
+
+            const newItem = {
+                id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                text: text,
+                qty: qty,
+                packed: false
+            };
+
+            cat.items.push(newItem);
+
+            // If user is currently on "Packed" filter, switch to "All" so they see their newly added item
+            if (appState.filter === 'packed') {
+                appState.filter = 'all';
+            }
+
+            saveState();
+            renderAll();
+            showToast(`Added "${text}" to ${cat.name}`);
+        }
+
+        function toggleQuickAddBar() {
+            const form = document.getElementById('quick-add-form');
+            const isHidden = form.classList.contains('hidden');
+            if (isHidden) {
+                form.classList.remove('hidden');
+                form.classList.add('flex');
+                document.getElementById('global-item-name').focus();
+            } else {
+                form.classList.add('hidden');
+                form.classList.remove('flex');
+            }
+        }
+
+        // ==========================================
+        // FILTERING & SEARCH
+        // ==========================================
+        function setFilter(filterType) {
+            appState.filter = filterType;
+            renderAll();
+        }
+
+        function handleSearch(value) {
+            appState.searchQuery = value;
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (value.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            renderCategories();
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('search-input');
+            searchInput.value = '';
+            handleSearch('');
+            searchInput.focus();
+        }
+
+        function resetFiltersAndSearch() {
+            appState.filter = 'all';
+            clearSearch();
+            renderAll();
+        }
+
+        // ==========================================
+        // MODALS & RESET WORKFLOWS
+        // ==========================================
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmUncheckAll() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            activeTrip.categories.forEach(cat => {
+                cat.items.forEach(item => {
+                    item.packed = false;
+                });
+            });
+            saveState();
+            renderAll();
+            closeModal('uncheck-modal');
+            showToast(`Unpacked all items in "${activeTrip.title}"`);
+        }
+
+        function confirmFactoryReset() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip) return;
+
+            activeTrip.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+            appState.filter = 'all';
+            appState.searchQuery = '';
+            document.getElementById('search-input').value = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+
+            saveState();
+            renderAll();
+            closeModal('reset-modal');
+            showToast(`Reset "${activeTrip.title}" to default items`);
+        }
+
+        // ==========================================
+        // EXPORT & IMPORT JSON (MULTI-TRIP & SINGLE-TRIP)
+        // ==========================================
+        function buildExportPayload(scope = 'all') {
+            const isDark = document.documentElement.classList.contains('dark');
+            const activeTrip = getActiveTrip();
+
+            if (scope === 'current' && activeTrip) {
+                return {
+                    app: 'wanderlust-packing-checklist',
+                    version: 2,
+                    scope: 'single-trip',
+                    exportedAt: new Date().toISOString(),
+                    theme: isDark ? 'dark' : 'light',
+                    tripTitle: activeTrip.title,
+                    categories: activeTrip.categories
+                };
+            }
+
+            return {
+                app: 'wanderlust-packing-checklist',
+                version: 2,
+                scope: 'workspace',
+                exportedAt: new Date().toISOString(),
+                theme: isDark ? 'dark' : 'light',
+                activeTripId: appState.activeTripId,
+                trips: appState.trips
+            };
+        }
+
+        function exportChecklistJSON(scope = 'all') {
+            try {
+                const dropdown = document.getElementById('export-dropdown');
+                if (dropdown) dropdown.classList.add('hidden');
+
+                const payload = buildExportPayload(scope);
+                const jsonString = JSON.stringify(payload, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const activeTrip = getActiveTrip();
+                const baseName = scope === 'current' && activeTrip
+                    ? activeTrip.title
+                    : `wanderlust-all-trips-${appState.trips.length}`;
+
+                const safeSlug = baseName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/(^-|-$)/g, '') || 'vacation-pack';
+                const dateStamp = new Date().toISOString().slice(0, 10);
+                const filename = `${safeSlug}-${dateStamp}.json`;
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                showToast(`Exported "${filename}"`);
+            } catch (err) {
+                console.error('Export failed:', err);
+                showToast('Failed to export JSON file', true);
+            }
+        }
+
+        function triggerImportJSON() {
+            const fileInput = document.getElementById('import-json-input');
+            fileInput.value = '';
+            fileInput.click();
+        }
+
+        function handleImportJSONFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                validateAndApplyImportedJSON(content, file.name);
+            };
+            reader.onerror = () => {
+                showToast('Error reading the selected file', true);
+            };
+            reader.readAsText(file);
+        }
+
+        function sanitizeCategoriesArray(categories) {
+            if (!Array.isArray(categories)) {
+                throw new Error('Invalid categories array');
+            }
+            return categories.map((cat, cIdx) => {
+                if (!cat || typeof cat !== 'object' || !Array.isArray(cat.items)) {
+                    throw new Error(`Invalid category format at index ${cIdx}`);
+                }
+                const rawIcon = String(cat.icon || 'ph-suitcase-rolling');
+                return {
+                    id: String(cat.id || `cat_${cIdx}`),
+                    name: String(cat.name || 'Unnamed Category'),
+                    icon: rawIcon === 'ph-Identification-card' ? 'ph-identification-card' : rawIcon,
+                    accent: String(cat.accent || 'indigo'),
+                    items: cat.items.map((item, iIdx) => ({
+                        id: String(item.id || `item_${cIdx}_${iIdx}_${Date.now()}`),
+                        text: String(item.text || 'Unnamed Item'),
+                        qty: Math.max(1, Math.min(99, parseInt(item.qty, 10) || 1)),
+                        packed: Boolean(item.packed)
+                    }))
+                };
+            });
+        }
+
+        function validateAndApplyImportedJSON(rawJsonString, sourceLabel = 'backup') {
+            try {
+                const parsed = JSON.parse(rawJsonString);
+                if (!parsed || typeof parsed !== 'object') {
+                    throw new Error('Invalid JSON payload.');
+                }
+
+                const importMode = document.getElementById('import-mode-select')?.value || 'merge';
+
+                // Case 1: Multi-Trip Workspace JSON (`trips` array)
+                if (Array.isArray(parsed.trips) && parsed.trips.length > 0) {
+                    const sanitizedTrips = parsed.trips.map((t, idx) => ({
+                        id: String(t.id || `trip_imp_${Date.now()}_${idx}`),
+                        title: (typeof t.title === 'string' && t.title.trim()) ? t.title.trim() : `Imported Trip ${idx + 1}`,
+                        createdAt: t.createdAt || new Date().toISOString(),
+                        categories: sanitizeCategoriesArray(t.categories)
+                    }));
+
+                    if (importMode === 'replace') {
+                        appState.trips = sanitizedTrips;
+                        appState.activeTripId = parsed.activeTripId && sanitizedTrips.some(t => t.id === parsed.activeTripId)
+                            ? parsed.activeTripId
+                            : sanitizedTrips[0].id;
+                    } else {
+                        // Merge: add trips with unique IDs so no existing trip is lost
+                        sanitizedTrips.forEach((impTrip, i) => {
+                            const exists = appState.trips.some(t => t.id === impTrip.id);
+                            if (exists) {
+                                impTrip.id = `trip_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`;
+                            }
+                            appState.trips.push(impTrip);
+                        });
+                        appState.activeTripId = sanitizedTrips[0].id;
+                    }
+
+                    showToast(`Imported ${sanitizedTrips.length} trip(s) from ${sourceLabel}`);
+                }
+                // Case 2: Single-Trip JSON (v1 backward-compatible or v2 single-trip export)
+                else if (Array.isArray(parsed.categories)) {
+                    const validatedCategories = sanitizeCategoriesArray(parsed.categories);
+                    const importedTitle = (typeof parsed.tripTitle === 'string' && parsed.tripTitle.trim())
+                        ? parsed.tripTitle.trim()
+                        : 'Imported Vacation Pack';
+
+                    if (importMode === 'replace' && getActiveTrip()) {
+                        const activeTrip = getActiveTrip();
+                        activeTrip.title = importedTitle;
+                        activeTrip.categories = validatedCategories;
+                        showToast(`Updated "${importedTitle}" from ${sourceLabel}`);
+                    } else {
+                        const newTrip = {
+                            id: 'trip_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                            title: importedTitle,
+                            createdAt: new Date().toISOString(),
+                            categories: validatedCategories
+                        };
+                        appState.trips.push(newTrip);
+                        appState.activeTripId = newTrip.id;
+                        showToast(`Added "${importedTitle}" as a new trip`);
+                    }
+                } else {
+                    throw new Error('Unrecognized packing JSON structure.');
+                }
+
+                // Apply theme if included in backup
+                if (parsed.theme === 'dark' || parsed.theme === 'light') {
+                    if (parsed.theme === 'dark') {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                    try {
+                        localStorage.setItem(THEME_KEY, parsed.theme);
+                    } catch (e) {}
+                }
+
+                saveState();
+                syncActiveTripHeader();
+                populateGlobalCategoryDropdown();
+                renderAll();
+                closeModal('sync-modal');
+            } catch (err) {
+                console.error('Import JSON error:', err);
+                showToast('Invalid packing list JSON file', true);
+            }
+        }
+
+        function setSyncScope(scope) {
+            currentSyncScope = scope;
+            const btnAll = document.getElementById('sync-scope-all');
+            const btnCur = document.getElementById('sync-scope-current');
+
+            if (scope === 'all') {
+                btnAll.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs transition';
+                btnCur.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
+            } else {
+                btnCur.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-xs transition';
+                btnAll.className = 'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
+            }
+
+            const textarea = document.getElementById('sync-json-textarea');
+            if (textarea) {
+                textarea.value = JSON.stringify(buildExportPayload(currentSyncScope), null, 2);
+            }
+        }
+
+        function openSyncModal() {
+            setSyncScope('all');
+            openModal('sync-modal');
+        }
+
+        function legacyCopy(text) {
+            const previousFocus = document.activeElement;
+            const field = Object.assign(document.createElement('textarea'), { value: text });
+            field.setAttribute('readonly', '');
+            field.style.cssText = 'position:fixed;inset-block-start:0;opacity:0';
+            document.body.append(field);
+            field.select();
+            try {
+                return document.execCommand('copy');
+            } finally {
+                field.remove();
+                previousFocus?.focus({ preventScroll: true });
+            }
+        }
+
+        async function copySyncJSON() {
+            const textarea = document.getElementById('sync-json-textarea');
+            const text = textarea ? textarea.value : '';
+            if (!text) {
+                showToast('Nothing to copy yet', true);
+                return;
+            }
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    throw new Error('Clipboard API unavailable');
+                }
+                showToast('Packing state JSON copied to clipboard');
+            } catch (err) {
+                try {
+                    if (legacyCopy(text)) {
+                        showToast('Packing state JSON copied to clipboard');
+                        return;
+                    }
+                } catch (fallbackErr) {}
+                showToast('Could not copy automatically—please copy manually', true);
+            }
+        }
+
+        function applyPastedSyncJSON() {
+            const textarea = document.getElementById('sync-json-textarea');
+            const raw = textarea.value.trim();
+            if (!raw) {
+                showToast('Please paste valid JSON first', true);
+                return;
+            }
+            validateAndApplyImportedJSON(raw, 'clipboard');
+        }
+
+        // ==========================================
+        // UTILITIES (TOAST & ESCAPE HTML)
+        // ==========================================
+        let toastTimeout;
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+            msgEl.textContent = message;
+
+            if (isError) {
+                iconEl.className = 'ph-fill ph-warning-circle text-rose-400 dark:text-rose-600 text-lg';
+            } else {
+                iconEl.className = 'ph-fill ph-check-circle text-brand-400 dark:text-brand-600 text-lg';
+            }
+
+            toast.classList.remove('opacity-0', 'translate-y-3');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-3');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 2600);
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Close modals on Escape key or backdrop click
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal('uncheck-modal');
+                closeModal('reset-modal');
+                closeModal('sync-modal');
+                closeModal('new-trip-modal');
+                closeModal('delete-trip-modal');
+                closeModal('pwa-modal');
+            }
+        });
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
