@@ -217,7 +217,8 @@ function startSubscriptions(user) {
     (err) => {
       console.error("Firestore member trips listener error:", err);
       setSyncStatus("error");
-      notifyApp("notifyToast", "Unable to sync trips from cloud", true);
+      const detail = err?.code ? ` (${err.code})` : "";
+      notifyApp("notifyToast", `Unable to sync trips from cloud${detail}`, true);
     }
   );
 

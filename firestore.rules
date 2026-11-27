@@ -65,7 +65,9 @@ service cloud.firestore {
 
     // Shared & personal packing trips
     match /trips/{tripId} {
-      allow read: if isMember(resource.data) || isInvited(resource.data);
+      allow get: if isMember(resource.data) || isInvited(resource.data);
+      allow list: if (isSignedIn() && request.auth.uid in resource.data.memberUids)
+        || (hasVerifiedEmail() && userEmailLower() in resource.data.invitedEmails);
 
       allow create: if isSignedIn()
         && request.resource.data.ownerUid == request.auth.uid
