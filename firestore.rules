@@ -1,0 +1,144 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasVerifiedEmail() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    function userEmailLower() {
+      return request.auth.token.email.lower();
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.ownerUid == request.auth.uid;
+    }
+
+    function isMember(data) {
+      return isSignedIn()
+        && data.memberUids is list
+        && request.auth.uid in data.memberUids;
+    }
+
+    function isInvited(data) {
+      return hasVerifiedEmail()
+        && data.invitedEmails is list
+        && userEmailLower() in data.invitedEmails;
+    }
+
+    function isAddingSelfOnly() {
+      return request.resource.data.memberUids is list
+        && resource.data.memberUids is list
+        && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+        && request.resource.data.memberUids.size() == resource.data.memberUids.size() + 1
+        && request.auth.uid in request.resource.data.memberUids
+        && !(request.auth.uid in resource.data.memberUids)
+        && request.resource.data.members is map
+        && resource.data.members is map
+        && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+        && request.resource.data.members[request.auth.uid].role == 'editor';
+    }
+
+    function isRemovingSelfOnly() {
+      return !isOwner(resource.data)
+        && isMember(resource.data)
+        && request.resource.data.memberUids is list
+        && resource.data.memberUids.hasAll(request.resource.data.memberUids)
+        && request.resource.data.memberUids.size() == resource.data.memberUids.size() - 1
+        && !(request.auth.uid in request.resource.data.memberUids)
+        && request.resource.data.members is map
+        && resource.data.members is map
+        && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+        && !(request.auth.uid in request.resource.data.members);
+    }
+
+    // Per-user preferences
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Shared & personal packing trips
+    match /trips/{tripId} {
+      allow read: if isMember(resource.data) || isInvited(resource.data);
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids is list
+        && request.resource.data.memberUids.size() == 1
+        && request.auth.uid in request.resource.data.memberUids
+        && request.resource.data.title is string
+        && request.resource.data.categories is list;
+
+      // 1) Owner can edit content and sharing settings (cannot change ownerUid or remove self)
+      // 2) Active member or invited user can edit collaborative trip content
+      // 3) Invited user can self-enroll into memberUids & members
+      // 4) Signed-in user knowing an enabled joinCode can self-enroll into memberUids & members
+      // 5) Non-owner member can leave the trip (and remove own email from invitedEmails)
+      allow update: if
+        (
+          isOwner(resource.data)
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.memberUids is list
+          && request.auth.uid in request.resource.data.memberUids
+        )
+        || (
+          (isMember(resource.data) || isInvited(resource.data))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'categories', 'updatedAt', 'updatedBy'])
+        )
+        || (
+          isInvited(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members', 'updatedAt'])
+          && isAddingSelfOnly()
+        )
+        || (
+          isSignedIn()
+          && resource.data.joinCodeEnabled == true
+          && resource.data.joinCode is string
+          && resource.data.joinCode.size() >= 6
+          && request.resource.data.lastJoinedCode == resource.data.joinCode
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members', 'lastJoinedCode', 'updatedAt'])
+          && isAddingSelfOnly()
+        )
+        || (
+          isRemovingSelfOnly()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members', 'invitedEmails', 'updatedAt'])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['invitedEmails'])
+            || (
+              hasVerifiedEmail()
+              && resource.data.invitedEmails is list
+              && request.resource.data.invitedEmails is list
+              && !(userEmailLower() in request.resource.data.invitedEmails)
+              && resource.data.invitedEmails.hasAll(request.resource.data.invitedEmails)
+              && request.resource.data.invitedEmails.size() >= resource.data.invitedEmails.size() - 1
+            )
+          )
+        );
+
+      allow delete: if isOwner(resource.data);
+    }
+
+    // Join code lookup index: doc ID is the uppercase code (e.g. "7K9M2P4X")
+    match /joinCodes/{code} {
+      // Get by exact code only; never allow listing/enumerating codes
+      allow get: if isSignedIn();
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && code.size() >= 6
+        && code.size() <= 16
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.tripId is string
+        && getAfter(/databases/$(database)/documents/trips/$(request.resource.data.tripId)).data.ownerUid == request.auth.uid;
+
+      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

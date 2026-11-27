@@ -1,9 +1,11 @@
-const CACHE_NAME = 'packlist-pwa-v1';
+const CACHE_NAME = 'packlist-pwa-v3';
 
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './firebase-config.js',
+  './firebase-sync.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -21,7 +23,8 @@ const CDN_ORIGINS = new Set([
   'https://cdn.tailwindcss.com',
   'https://unpkg.com',
   'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com'
+  'https://fonts.gstatic.com',
+  'https://www.gstatic.com'
 ]);
 
 async function cacheExternalAssets(cache) {
@@ -77,21 +80,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // Navigation requests: network-first so fresh deploys appear immediately, with offline fallback
+  // Navigation requests: network-first (bypassing HTTP cache) so fresh deploys appear immediately, with offline fallback
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
         try {
-          const networkResponse = await fetch(request);
+          const networkResponse = await fetch(request.url, { cache: 'no-cache' });
           if (networkResponse && networkResponse.ok) {
-            await cache.put(request, networkResponse.clone());
             await cache.put('./index.html', networkResponse.clone());
           }
           return networkResponse;
         } catch (err) {
           return (
-            (await cache.match(request)) ||
             (await cache.match('./index.html')) ||
             (await cache.match('./'))
           );

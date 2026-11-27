@@ -75,6 +75,52 @@
             0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
             100% { transform: translateY(40px) rotate(360deg); opacity: 0; }
         }
+        /* Native <dialog> modal scroll containment & backdrop */
+        dialog:modal {
+            overscroll-behavior: contain;
+        }
+        dialog::backdrop {
+            background-color: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            overflow: hidden;
+            overscroll-behavior: contain;
+        }
+        /* Post-interaction form validation feedback */
+        .field-hint {
+            display: block;
+            font-size: 0.75rem;
+            line-height: 1.25;
+            margin-bottom: 0.375rem;
+        }
+        .error-msg {
+            display: none;
+            font-size: 0.75rem;
+            color: #dc2626;
+            margin-top: 0.375rem;
+        }
+        .dark .error-msg {
+            color: #f87171;
+        }
+        :is(:user-invalid, .user-invalid-fallback) {
+            border-color: #dc2626 !important;
+        }
+        :is(:user-invalid, .user-invalid-fallback) + .error-msg {
+            display: block;
+        }
+        input:user-valid {
+            border-color: #0d9488;
+        }
+        .visually-hidden:where(:not(:focus-within, :active)) {
+            position: absolute !important;
+            clip-path: inset(50%) !important;
+            overflow: hidden !important;
+            width: 1px !important;
+            height: 1px !important;
+            margin: -1px !important;
+            padding: 0 !important;
+            border: 0 !important;
+            white-space: nowrap !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans min-h-screen transition-colors duration-200 selection:bg-brand-500 selection:text-white pb-16">
@@ -97,6 +143,25 @@
                         <span id="connectivity-text-short" class="md:hidden">PWA</span>
                     </button>
 
+                    <!-- Google Sign-In / Account Pill -->
+                    <div id="auth-header-slot" class="inline-flex items-center">
+                        <button id="sign-in-btn" type="button" onclick="handleGoogleSignIn()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition active:scale-95 whitespace-nowrap" title="Sign in with Google to sync and share trips">
+                            <i class="ph-bold ph-google-logo text-brand-600 dark:text-brand-400"></i>
+                            <span class="hidden sm:inline">Sign in</span>
+                        </button>
+                        <button id="account-pill-btn" type="button" onclick="openAccountModal()" class="hidden items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition whitespace-nowrap" title="Account & cloud sync status">
+                            <img id="account-avatar-img" src="" alt="" class="hidden w-5 h-5 rounded-full object-cover">
+                            <span id="account-avatar-fallback" class="w-5 h-5 rounded-full bg-brand-600 text-white text-[10px] font-bold inline-flex items-center justify-center">U</span>
+                            <span id="cloud-sync-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span id="account-name-short" class="hidden lg:inline text-xs font-semibold max-w-[90px] truncate">Account</span>
+                        </button>
+                    </div>
+
+                    <button type="button" onclick="openJoinTripModal()" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition active:scale-95 whitespace-nowrap" title="Join a shared trip with a join code">
+                        <i class="ph-bold ph-ticket"></i>
+                        <span class="hidden sm:inline">Join</span>
+                    </button>
+
                     <button onclick="openNewTripModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-xs shadow-brand-500/20 transition active:scale-95 whitespace-nowrap" title="Create a new trip planner">
                         <i class="ph-bold ph-plus"></i>
                         <span>New Trip</span>
@@ -104,8 +169,8 @@
                     <button onclick="duplicateActiveTrip()" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="Duplicate active trip">
                         <i class="ph ph-copy text-base"></i>
                     </button>
-                    <button onclick="openDeleteTripModal()" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="Delete active trip">
-                        <i class="ph ph-trash-simple text-base"></i>
+                    <button id="delete-trip-btn" onclick="openDeleteTripModal()" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="Delete active trip" aria-label="Delete active trip">
+                        <i id="delete-trip-btn-icon" class="ph ph-trash-simple text-base"></i>
                     </button>
                 </div>
             </div>
@@ -137,6 +202,13 @@
 
                 <!-- Action Buttons -->
                 <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <!-- Share Trip Button -->
+                    <button id="share-trip-btn" type="button" onclick="openShareTripModal()" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition active:scale-95" title="Share this trip via join code or email invite">
+                        <i class="ph-bold ph-users-three text-base"></i>
+                        <span>Share</span>
+                        <span id="share-badge" class="hidden px-1.5 py-0.5 text-[10px] rounded-md bg-emerald-600 text-white font-bold">0</span>
+                    </button>
+
                     <!-- Install App / PWA Guide Button -->
                     <button id="install-app-btn" type="button" onclick="handleInstallClick(this)" class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs shadow-sky-500/20 transition active:scale-95" title="Install PackList as a standalone app or view PWA guide">
                         <i class="ph-bold ph-device-mobile-speaker text-base"></i>
@@ -413,18 +485,18 @@
                     <i class="ph-fill ph-trash text-2xl"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Delete This Trip?</h3>
+                    <h3 id="delete-trip-modal-title" class="text-lg font-bold text-slate-900 dark:text-white">Delete This Trip?</h3>
                     <p id="delete-trip-subtitle" class="text-xs text-slate-500 dark:text-slate-400">Remove planner from workspace</p>
                 </div>
             </div>
-            <p class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+            <p id="delete-trip-body" class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
                 Are you sure you want to permanently delete <span id="delete-trip-name-span" class="font-bold text-slate-900 dark:text-white"></span>? This action cannot be undone.
             </p>
             <div class="flex items-center justify-end gap-2.5">
                 <button onclick="closeModal('delete-trip-modal')" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                     Cancel
                 </button>
-                <button onclick="confirmDeleteActiveTrip()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition">
+                <button id="delete-trip-confirm-btn" onclick="confirmDeleteActiveTrip()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition">
                     Delete Trip
                 </button>
             </div>
@@ -665,6 +737,181 @@
         </div>
     </div>
 
+    <!-- Share Trip Modal (Native <dialog> with light-dismiss) -->
+    <dialog id="share-trip-modal" closedby="any" aria-labelledby="share-trip-title" class="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 shadow-2xl text-slate-800 dark:text-slate-100">
+        <div class="p-6 max-h-[88vh] overflow-y-auto">
+            <div class="flex items-center justify-between gap-3.5 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-users-three text-2xl"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 id="share-trip-title" class="text-lg font-bold text-slate-900 dark:text-white truncate">Share Trip</h1>
+                        <p id="share-trip-subtitle" class="text-xs text-slate-500 dark:text-slate-400 truncate">Collaborate in real time with family & friends</p>
+                    </div>
+                </div>
+                <button type="button" onclick="this.closest('dialog').close()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0" aria-label="Close share dialog">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+            <div id="share-modal-body"></div>
+        </div>
+    </dialog>
+
+    <!-- Join Shared Trip Modal (Native <dialog> with light-dismiss) -->
+    <dialog id="join-trip-modal" closedby="any" aria-labelledby="join-trip-title" class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 shadow-2xl text-slate-800 dark:text-slate-100">
+        <div class="p-6">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-ticket text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 id="join-trip-title" class="text-lg font-bold text-slate-900 dark:text-white">Join a Shared Trip</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Enter an invite code from the trip owner</p>
+                    </div>
+                </div>
+                <button type="button" onclick="this.closest('dialog').close()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label="Close join dialog">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <form id="join-trip-form" onsubmit="handleJoinTripSubmit(event)">
+                <div class="mb-4">
+                    <label for="join-code-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Trip Join Code</label>
+                    <span id="join-code-hint" class="field-hint text-slate-500 dark:text-slate-400">Format: 6–16 letters or numbers (e.g., 7K9M-2P4X)</span>
+                    <input
+                        type="text"
+                        id="join-code-input"
+                        name="joinCode"
+                        required
+                        autofocus
+                        minlength="6"
+                        maxlength="16"
+                        pattern="[A-Za-z0-9\-\s]{6,16}"
+                        autocomplete="off"
+                        spellcheck="false"
+                        placeholder="e.g., 7K9M-2P4X"
+                        aria-describedby="join-code-hint"
+                        data-error="join-code-error"
+                        class="w-full px-3.5 py-2.5 text-sm font-mono uppercase tracking-wider bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
+                    >
+                    <div id="join-code-error" class="error-msg">
+                        <span role="img" aria-label="Error">❌</span> Enter a valid 6–16 character join code using letters and numbers.
+                    </div>
+                </div>
+
+                <div id="join-auth-note" class="hidden mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-200">
+                    You'll be prompted to sign in with Google to join and sync this trip.
+                </div>
+
+                <div class="flex items-center justify-end gap-2.5">
+                    <button type="button" onclick="this.closest('dialog').close()" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        Cancel
+                    </button>
+                    <button id="join-trip-submit-btn" type="submit" class="px-5 py-2 text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition">
+                        Join Trip
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- Local-to-Cloud Migration Modal (Native <dialog>, explicit choice) -->
+    <dialog id="migrate-trips-modal" aria-labelledby="migrate-trips-title" class="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 shadow-2xl text-slate-800 dark:text-slate-100">
+        <div class="p-6">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-brand-100 dark:bg-brand-950/80 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-cloud-arrow-up text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 id="migrate-trips-title" class="text-lg font-bold text-slate-900 dark:text-white">Sync Local Trips to Cloud?</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Move your device trips into your Google account</p>
+                    </div>
+                </div>
+                <button type="button" onclick="skipLocalMigration()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label="Close migration dialog">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
+                We found <span id="migrate-trips-count" class="font-bold text-slate-900 dark:text-white">0</span> trip(s) saved locally on this device. Upload them to your cloud workspace so you can access and share them across devices?
+            </p>
+            <ul id="migrate-trips-list" class="mb-5 space-y-1.5 max-h-40 overflow-y-auto text-xs"></ul>
+
+            <div class="flex items-center justify-end gap-2.5">
+                <button type="button" autofocus onclick="skipLocalMigration()" class="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    Skip for Now
+                </button>
+                <button id="migrate-upload-btn" type="button" onclick="confirmLocalMigration()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition">
+                    Upload Local Trips
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Google Account & Sync Status Modal (Native <dialog> with light-dismiss) -->
+    <dialog id="account-modal" closedby="any" aria-labelledby="account-title" class="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 shadow-2xl text-slate-800 dark:text-slate-100">
+        <div class="p-6">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-sky-100 dark:bg-sky-950/80 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                        <i class="ph-fill ph-user-circle text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 id="account-title" class="text-lg font-bold text-slate-900 dark:text-white">Account & Cloud Sync</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Real-time Firestore sync & offline cache</p>
+                    </div>
+                </div>
+                <button type="button" onclick="this.closest('dialog').close()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label="Close account dialog">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800 flex items-center gap-3 mb-4">
+                <img id="account-modal-avatar" src="" alt="" class="hidden w-12 h-12 rounded-full object-cover shrink-0">
+                <div id="account-modal-initials" class="w-12 h-12 rounded-full bg-brand-600 text-white font-bold text-base flex items-center justify-center shrink-0">U</div>
+                <div class="min-w-0 flex-1">
+                    <div id="account-modal-name" class="text-sm font-bold text-slate-900 dark:text-white truncate">Signed In User</div>
+                    <div id="account-modal-email" class="text-xs text-slate-500 dark:text-slate-400 truncate">user@example.com</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5 mb-5">
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+                    <div class="text-[11px] text-slate-400 font-medium">Cloud Sync</div>
+                    <div id="account-modal-sync" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">Synced</div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+                    <div class="text-[11px] text-slate-400 font-medium">Cloud Trips</div>
+                    <div id="account-modal-trips" class="text-xs font-bold text-slate-800 dark:text-slate-100 mt-0.5">0 trips</div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button type="button" onclick="this.closest('dialog').close(); openJoinTripModal();" class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition">
+                        <i class="ph-bold ph-ticket"></i>
+                        <span>Join Trip</span>
+                    </button>
+                    <button id="account-upload-local-btn" type="button" onclick="this.closest('dialog').close(); openMigrationModal(getLocalGuestTrips());" class="hidden items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 hover:bg-brand-100 transition">
+                        <i class="ph-bold ph-cloud-arrow-up"></i>
+                        <span>Upload Local Trips</span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="this.closest('dialog').close()" class="px-3.5 py-2 text-xs font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition">
+                        Close
+                    </button>
+                    <button type="button" onclick="handleGoogleSignOut()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/70 dark:border-rose-800/60 hover:bg-rose-100 transition">
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-3 transition-all duration-300">
         <div class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm font-medium">
@@ -680,7 +927,7 @@
         const WORKSPACE_STORAGE_KEY = 'wanderlust_packing_workspace_v2';
         const LEGACY_STORAGE_KEY = 'wanderlust_packing_checklist_v1';
         const THEME_KEY = 'wanderlust_theme_v1';
-        const PWA_CACHE_NAME = 'packlist-pwa-v1';
+        const PWA_CACHE_NAME = 'packlist-pwa-v3';
         const PWA_EXTERNAL_ASSETS = [
             'https://cdn.tailwindcss.com',
             'https://unpkg.com/@phosphor-icons/web',
@@ -860,12 +1107,19 @@
         // ==========================================
         function initApp() {
             loadTheme();
-            loadState();
+            captureUrlJoinCode();
+            if (!isCloudActive()) {
+                loadState();
+            }
             populateGlobalCategoryDropdown();
             setupTripTitleListener();
             setupGlobalClickDismiss();
+            initDialogFallbacks();
+            initAriaValidation();
             initPWA();
+            renderAuthUI();
             renderAll();
+            processPendingJoinIfAny();
         }
 
         // ==========================================
@@ -976,6 +1230,8 @@
                     './',
                     './index.html',
                     './manifest.json',
+                    './firebase-config.js',
+                    './firebase-sync.js',
                     './icons/icon.svg',
                     './icons/icon-192.png',
                     './icons/icon-512.png',
@@ -1254,7 +1510,60 @@
             syncActiveTripHeader();
         }
 
-        function saveState() {
+        let isCloudSession = false;
+        let hasCreatedStarterCloudTrip = false;
+        let hasPromptedMigrationThisSession = false;
+        let currentCloudSyncStatus = 'local';
+
+        function isCloudActive() {
+            return Boolean(isCloudSession && window.PackListCloud && window.PackListCloud.isSignedIn());
+        }
+
+        function isTripOwner(trip) {
+            if (!trip || !isCloudActive() || !trip.ownerUid) return true;
+            const user = window.PackListCloud.getUser();
+            return Boolean(user && trip.ownerUid === user.uid);
+        }
+
+        function getLocalGuestTrips() {
+            try {
+                const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed?.trips) ? parsed.trips : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function persistActiveTripSelection() {
+            try {
+                if (isCloudActive()) {
+                    const user = window.PackListCloud.getUser();
+                    if (user && appState.activeTripId) {
+                        localStorage.setItem(`packlist_cloud_active_trip_${user.uid}`, appState.activeTripId);
+                    }
+                } else {
+                    const payload = {
+                        activeTripId: appState.activeTripId,
+                        trips: appState.trips
+                    };
+                    localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(payload));
+                }
+            } catch (e) {
+                console.error('Failed to persist active trip selection:', e);
+            }
+        }
+
+        function saveState(options = {}) {
+            if (isCloudActive()) {
+                persistActiveTripSelection();
+                const activeTrip = getActiveTrip();
+                if (activeTrip && window.PackListCloud) {
+                    window.PackListCloud.saveTripContent(activeTrip, options);
+                }
+                return;
+            }
             try {
                 const payload = {
                     activeTripId: appState.activeTripId,
@@ -1270,9 +1579,46 @@
             const activeTrip = getActiveTrip();
             if (!activeTrip) return;
             document.getElementById('trip-title').textContent = activeTrip.title;
+
             const subtitle = document.getElementById('trip-meta-subtitle');
+            const isOwner = isTripOwner(activeTrip);
+            const memberCount = Array.isArray(activeTrip.memberUids) ? activeTrip.memberUids.length : 1;
+            const isShared = isCloudActive() && (memberCount > 1 || (activeTrip.invitedEmails && activeTrip.invitedEmails.length > 0) || activeTrip.joinCodeEnabled);
+
             if (subtitle) {
-                subtitle.textContent = `Planner ${appState.trips.indexOf(activeTrip) + 1} of ${appState.trips.length} • Click title to rename`;
+                const posText = `Planner ${appState.trips.indexOf(activeTrip) + 1} of ${appState.trips.length}`;
+                if (isCloudActive() && !isOwner) {
+                    const ownerLabel = activeTrip.ownerName || activeTrip.ownerEmail || 'Trip Owner';
+                    subtitle.textContent = `${posText} • Shared by ${ownerLabel}`;
+                } else if (isShared) {
+                    subtitle.textContent = `${posText} • Shared with ${memberCount} ${memberCount === 1 ? 'person' : 'people'}`;
+                } else {
+                    subtitle.textContent = `${posText} • Click title to rename`;
+                }
+            }
+
+            const shareBadge = document.getElementById('share-badge');
+            if (shareBadge) {
+                if (isCloudActive() && memberCount > 1) {
+                    shareBadge.textContent = String(memberCount);
+                    shareBadge.classList.remove('hidden');
+                } else {
+                    shareBadge.classList.add('hidden');
+                }
+            }
+
+            const deleteBtn = document.getElementById('delete-trip-btn');
+            const deleteIcon = document.getElementById('delete-trip-btn-icon');
+            if (deleteBtn && deleteIcon) {
+                if (isCloudActive() && !isOwner) {
+                    deleteBtn.title = 'Leave shared trip';
+                    deleteBtn.setAttribute('aria-label', 'Leave shared trip');
+                    deleteIcon.className = 'ph ph-sign-out text-base';
+                } else {
+                    deleteBtn.title = 'Delete active trip';
+                    deleteBtn.setAttribute('aria-label', 'Delete active trip');
+                    deleteIcon.className = 'ph ph-trash-simple text-base';
+                }
             }
         }
 
@@ -1284,7 +1630,7 @@
                 const cleaned = titleEl.textContent.trim() || 'Untitled Trip';
                 titleEl.textContent = cleaned;
                 activeTrip.title = cleaned;
-                saveState();
+                saveState({ immediate: true });
                 renderTripTabs();
             });
             titleEl.addEventListener('keydown', (e) => {
@@ -1342,10 +1688,13 @@
             container.innerHTML = appState.trips.map(trip => {
                 const isActive = trip.id === appState.activeTripId;
                 const stats = getTripStats(trip);
+                const isSharedTrip = isCloudActive() && ((Array.isArray(trip.memberUids) && trip.memberUids.length > 1) || (trip.ownerUid && trip.ownerUid !== window.PackListCloud.getUser()?.uid));
+                const sharedIcon = isSharedTrip ? `<i class="ph-bold ph-users text-[11px] opacity-80" title="Shared trip"></i>` : '';
 
                 if (isActive) {
                     return `
-                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs transition shrink-0">
+                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs transition shrink-0">
+                            ${sharedIcon}
                             <span class="truncate max-w-[160px]">${escapeHtml(trip.title)}</span>
                             <span class="px-1.5 py-0.5 text-[10px] rounded-md ${stats.pct === 100 && stats.total > 0 ? 'bg-emerald-500 text-white' : 'bg-white/20 dark:bg-slate-900/15'}">
                                 ${stats.pct}%
@@ -1354,7 +1703,8 @@
                     `;
                 } else {
                     return `
-                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition shrink-0">
+                        <button onclick="switchTrip('${trip.id}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition shrink-0">
+                            ${sharedIcon}
                             <span class="truncate max-w-[140px]">${escapeHtml(trip.title)}</span>
                             <span class="px-1.5 py-0.5 text-[10px] rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                                 ${stats.pct}%
@@ -1371,7 +1721,7 @@
             if (!target) return;
 
             appState.activeTripId = tripId;
-            saveState();
+            persistActiveTripSelection();
             syncActiveTripHeader();
             populateGlobalCategoryDropdown();
             renderAll();
@@ -1384,7 +1734,7 @@
             setTimeout(() => input.focus(), 50);
         }
 
-        function handleCreateTrip(event) {
+        async function handleCreateTrip(event) {
             event.preventDefault();
             const nameInput = document.getElementById('new-trip-name');
             const title = nameInput.value.trim() || 'New Adventure';
@@ -1397,6 +1747,20 @@
                 activeTrip ? activeTrip.categories : null
             );
 
+            if (isCloudActive()) {
+                try {
+                    appState.activeTripId = newTrip.id;
+                    persistActiveTripSelection();
+                    await window.PackListCloud.createTrip(newTrip);
+                    closeModal('new-trip-modal');
+                    showToast(`Created cloud trip "${title}"`);
+                } catch (err) {
+                    console.error('Create cloud trip failed:', err);
+                    showToast(err.message || 'Failed to create cloud trip', true);
+                }
+                return;
+            }
+
             appState.trips.push(newTrip);
             appState.activeTripId = newTrip.id;
             saveState();
@@ -1407,7 +1771,7 @@
             showToast(`Created trip "${title}"`);
         }
 
-        function duplicateActiveTrip() {
+        async function duplicateActiveTrip() {
             const activeTrip = getActiveTrip();
             if (!activeTrip) return;
 
@@ -1418,6 +1782,19 @@
                 createdAt: new Date().toISOString(),
                 categories: JSON.parse(JSON.stringify(activeTrip.categories))
             };
+
+            if (isCloudActive()) {
+                try {
+                    appState.activeTripId = duplicated.id;
+                    persistActiveTripSelection();
+                    await window.PackListCloud.createTrip(duplicated);
+                    showToast(`Duplicated "${activeTrip.title}"`);
+                } catch (err) {
+                    console.error('Duplicate cloud trip failed:', err);
+                    showToast(err.message || 'Failed to duplicate trip', true);
+                }
+                return;
+            }
 
             appState.trips.push(duplicated);
             appState.activeTripId = duplicated.id;
@@ -1431,21 +1808,64 @@
         function openDeleteTripModal() {
             const activeTrip = getActiveTrip();
             if (!activeTrip) return;
-            document.getElementById('delete-trip-name-span').textContent = `"${activeTrip.title}"`;
+            const isOwner = isTripOwner(activeTrip);
+
+            const titleEl = document.getElementById('delete-trip-modal-title');
             const sub = document.getElementById('delete-trip-subtitle');
-            if (appState.trips.length === 1) {
-                sub.textContent = 'This is your only trip—deleting it will create a fresh default planner';
+            const body = document.getElementById('delete-trip-body');
+            const btn = document.getElementById('delete-trip-confirm-btn');
+
+            if (isCloudActive() && !isOwner) {
+                titleEl.textContent = 'Leave Shared Trip?';
+                sub.textContent = `Shared by ${activeTrip.ownerName || activeTrip.ownerEmail || 'Owner'}`;
+                body.innerHTML = `Are you sure you want to leave <span class="font-bold text-slate-900 dark:text-white">"${escapeHtml(activeTrip.title)}"</span>? You will need a new invite or join code to rejoin.`;
+                btn.textContent = 'Leave Trip';
             } else {
-                sub.textContent = `You have ${appState.trips.length} trips in your workspace`;
+                titleEl.textContent = 'Delete This Trip?';
+                if (appState.trips.length === 1) {
+                    sub.textContent = 'This is your only trip—deleting it will create a fresh default planner';
+                } else {
+                    sub.textContent = `You have ${appState.trips.length} trips in your workspace`;
+                }
+                body.innerHTML = `Are you sure you want to permanently delete <span class="font-bold text-slate-900 dark:text-white">"${escapeHtml(activeTrip.title)}"</span>? This action cannot be undone.`;
+                btn.textContent = 'Delete Trip';
             }
+
             openModal('delete-trip-modal');
         }
 
-        function confirmDeleteActiveTrip() {
+        async function confirmDeleteActiveTrip() {
             const activeTrip = getActiveTrip();
             if (!activeTrip) return;
 
             const deletedName = activeTrip.title;
+
+            if (isCloudActive()) {
+                try {
+                    const isOwner = isTripOwner(activeTrip);
+                    if (!isOwner) {
+                        await window.PackListCloud.leaveTrip(activeTrip);
+                        closeModal('delete-trip-modal');
+                        showToast(`Left "${deletedName}"`);
+                    } else {
+                        const wasLastTrip = appState.trips.length <= 1;
+                        await window.PackListCloud.deleteTrip(activeTrip);
+                        closeModal('delete-trip-modal');
+                        showToast(`Deleted "${deletedName}"`);
+                        if (wasLastTrip) {
+                            const fallback = createTripObject('🏖️ Ultimate Vacation Pack', 'default');
+                            appState.activeTripId = fallback.id;
+                            persistActiveTripSelection();
+                            await window.PackListCloud.createTrip(fallback);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Delete/leave cloud trip failed:', err);
+                    showToast(err.message || 'Unable to update trip', true);
+                }
+                return;
+            }
+
             appState.trips = appState.trips.filter(t => t.id !== activeTrip.id);
 
             if (appState.trips.length === 0) {
@@ -2037,7 +2457,7 @@
             });
         }
 
-        function validateAndApplyImportedJSON(rawJsonString, sourceLabel = 'backup') {
+        async function validateAndApplyImportedJSON(rawJsonString, sourceLabel = 'backup') {
             try {
                 const parsed = JSON.parse(rawJsonString);
                 if (!parsed || typeof parsed !== 'object') {
@@ -2045,6 +2465,7 @@
                 }
 
                 const importMode = document.getElementById('import-mode-select')?.value || 'merge';
+                const cloud = isCloudActive();
 
                 // Case 1: Multi-Trip Workspace JSON (`trips` array)
                 if (Array.isArray(parsed.trips) && parsed.trips.length > 0) {
@@ -2055,7 +2476,15 @@
                         categories: sanitizeCategoriesArray(t.categories)
                     }));
 
-                    if (importMode === 'replace') {
+                    if (cloud) {
+                        for (let i = 0; i < sanitizedTrips.length; i++) {
+                            const t = sanitizedTrips[i];
+                            t.id = `trip_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`;
+                            await window.PackListCloud.createTrip(t);
+                        }
+                        appState.activeTripId = sanitizedTrips[0].id;
+                        persistActiveTripSelection();
+                    } else if (importMode === 'replace') {
                         appState.trips = sanitizedTrips;
                         appState.activeTripId = parsed.activeTripId && sanitizedTrips.some(t => t.id === parsed.activeTripId)
                             ? parsed.activeTripId
@@ -2085,6 +2514,9 @@
                         const activeTrip = getActiveTrip();
                         activeTrip.title = importedTitle;
                         activeTrip.categories = validatedCategories;
+                        if (cloud) {
+                            await window.PackListCloud.saveTripContent(activeTrip, { immediate: true });
+                        }
                         showToast(`Updated "${importedTitle}" from ${sourceLabel}`);
                     } else {
                         const newTrip = {
@@ -2093,8 +2525,14 @@
                             createdAt: new Date().toISOString(),
                             categories: validatedCategories
                         };
-                        appState.trips.push(newTrip);
-                        appState.activeTripId = newTrip.id;
+                        if (cloud) {
+                            appState.activeTripId = newTrip.id;
+                            persistActiveTripSelection();
+                            await window.PackListCloud.createTrip(newTrip);
+                        } else {
+                            appState.trips.push(newTrip);
+                            appState.activeTripId = newTrip.id;
+                        }
                         showToast(`Added "${importedTitle}" as a new trip`);
                     }
                 } else {
@@ -2113,10 +2551,12 @@
                     } catch (e) {}
                 }
 
-                saveState();
-                syncActiveTripHeader();
-                populateGlobalCategoryDropdown();
-                renderAll();
+                if (!cloud) {
+                    saveState();
+                    syncActiveTripHeader();
+                    populateGlobalCategoryDropdown();
+                    renderAll();
+                }
                 closeModal('sync-modal');
             } catch (err) {
                 console.error('Import JSON error:', err);
@@ -2233,6 +2673,828 @@
                 .replace(/'/g, '&#039;');
         }
 
+        // ==========================================
+        // CLOUD SYNC, GOOGLE AUTH & COLLABORATION
+        // ==========================================
+        function captureUrlJoinCode() {
+            try {
+                const url = new URL(window.location.href);
+                const rawJoin = url.searchParams.get('join');
+                if (!rawJoin) return;
+                const clean = rawJoin.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                if (clean) {
+                    sessionStorage.setItem('packlist_pending_join_code', clean);
+                    if (window.PackListCloud) {
+                        window.PackListCloud.setPendingJoinCode(clean);
+                    }
+                }
+                url.searchParams.delete('join');
+                window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+            } catch (_) {}
+        }
+
+        function renderAuthUI() {
+            const signInBtn = document.getElementById('sign-in-btn');
+            const accountPill = document.getElementById('account-pill-btn');
+            const avatarImg = document.getElementById('account-avatar-img');
+            const avatarFallback = document.getElementById('account-avatar-fallback');
+            const nameShort = document.getElementById('account-name-short');
+            const syncDot = document.getElementById('cloud-sync-dot');
+
+            const user = window.PackListCloud?.getUser();
+            if (user) {
+                signInBtn?.classList.add('hidden');
+                accountPill?.classList.remove('hidden');
+                accountPill?.classList.add('inline-flex');
+
+                const display = user.displayName || user.email || 'Account';
+                if (nameShort) nameShort.textContent = display.split(' ')[0];
+                const initial = display.trim().charAt(0).toUpperCase() || 'U';
+                if (avatarFallback) avatarFallback.textContent = initial;
+
+                if (user.photoURL && avatarImg) {
+                    avatarImg.src = user.photoURL;
+                    avatarImg.alt = display;
+                    avatarImg.classList.remove('hidden');
+                    avatarFallback?.classList.add('hidden');
+                } else {
+                    avatarImg?.classList.add('hidden');
+                    avatarFallback?.classList.remove('hidden');
+                }
+
+                if (syncDot) {
+                    const dotColors = {
+                        synced: 'bg-emerald-500',
+                        syncing: 'bg-amber-500 animate-pulse',
+                        offline: 'bg-slate-400',
+                        error: 'bg-rose-500',
+                        local: 'bg-slate-400'
+                    };
+                    syncDot.className = `w-2 h-2 rounded-full ${dotColors[currentCloudSyncStatus] || 'bg-emerald-500'}`;
+                }
+            } else {
+                signInBtn?.classList.remove('hidden');
+                accountPill?.classList.add('hidden');
+                accountPill?.classList.remove('inline-flex');
+            }
+        }
+
+        async function handleGoogleSignIn() {
+            if (!window.PackListCloud || !window.PackListCloud.isReady()) {
+                showToast('Cloud sign-in is unavailable offline', true);
+                return null;
+            }
+            try {
+                const user = await window.PackListCloud.signInWithGoogle();
+                showToast(`Signed in as ${user.displayName || user.email}`);
+                return user;
+            } catch (err) {
+                showToast(err.message || 'Sign-in failed', true);
+                return null;
+            }
+        }
+
+        async function handleGoogleSignOut() {
+            try {
+                await window.PackListCloud?.signOutUser();
+                document.getElementById('account-modal')?.close();
+                showToast('Signed out — using local device workspace');
+            } catch (err) {
+                showToast(err.message || 'Sign-out failed', true);
+            }
+        }
+
+        function updateAccountModalInfo() {
+            const user = window.PackListCloud?.getUser();
+            if (!user) return;
+
+            const avatar = document.getElementById('account-modal-avatar');
+            const initials = document.getElementById('account-modal-initials');
+            const nameEl = document.getElementById('account-modal-name');
+            const emailEl = document.getElementById('account-modal-email');
+            const syncEl = document.getElementById('account-modal-sync');
+            const tripsEl = document.getElementById('account-modal-trips');
+
+            const display = user.displayName || 'Google User';
+            if (nameEl) nameEl.textContent = display;
+            if (emailEl) emailEl.textContent = user.email || '';
+            if (initials) initials.textContent = display.trim().charAt(0).toUpperCase() || 'U';
+
+            if (user.photoURL && avatar) {
+                avatar.src = user.photoURL;
+                avatar.alt = display;
+                avatar.classList.remove('hidden');
+                initials?.classList.add('hidden');
+            } else {
+                avatar?.classList.add('hidden');
+                initials?.classList.remove('hidden');
+            }
+
+            const statusLabels = {
+                synced: ['Synced in real time', 'text-emerald-600 dark:text-emerald-400'],
+                syncing: ['Syncing changes...', 'text-amber-600 dark:text-amber-400'],
+                offline: ['Offline (queued locally)', 'text-slate-500 dark:text-slate-400'],
+                error: ['Sync error', 'text-rose-600 dark:text-rose-400'],
+                local: ['Local only', 'text-slate-500']
+            };
+            const [label, colorClass] = statusLabels[currentCloudSyncStatus] || statusLabels.synced;
+            if (syncEl) {
+                syncEl.textContent = label;
+                syncEl.className = `text-xs font-bold mt-0.5 ${colorClass}`;
+            }
+
+            if (tripsEl) {
+                const sharedCount = appState.trips.filter(t => (t.memberUids?.length || 0) > 1).length;
+                tripsEl.textContent = `${appState.trips.length} ${appState.trips.length === 1 ? 'trip' : 'trips'} (${sharedCount} shared)`;
+            }
+
+            const uploadLocalBtn = document.getElementById('account-upload-local-btn');
+            if (uploadLocalBtn) {
+                const hasLocal = getLocalGuestTrips().length > 0;
+                uploadLocalBtn.classList.toggle('hidden', !hasLocal);
+                uploadLocalBtn.classList.toggle('inline-flex', hasLocal);
+            }
+        }
+
+        function openAccountModal() {
+            if (!isCloudActive()) {
+                handleGoogleSignIn();
+                return;
+            }
+            updateAccountModalInfo();
+            document.getElementById('account-modal')?.showModal();
+        }
+
+        let isSubmittingJoinForAuth = false;
+
+        function formatJoinCodeLocal(code) {
+            const clean = String(code || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            return clean.length === 8 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
+        }
+
+        async function processPendingJoinIfAny() {
+            let pending = '';
+            try {
+                pending = sessionStorage.getItem('packlist_pending_join_code') || '';
+            } catch (_) {}
+            if (!pending) return;
+
+            if (isCloudActive()) {
+                try {
+                    sessionStorage.removeItem('packlist_pending_join_code');
+                    window.PackListCloud.clearPendingJoinCode();
+                    isSubmittingJoinForAuth = true;
+                    document.getElementById('join-trip-modal')?.close();
+                    isSubmittingJoinForAuth = false;
+                    const res = await window.PackListCloud.redeemJoinCode(pending);
+                    appState.activeTripId = res.tripId;
+                    persistActiveTripSelection();
+                    showToast(res.alreadyMember ? `Opened "${res.tripTitle}"` : `Joined "${res.tripTitle}"!`);
+                } catch (err) {
+                    isSubmittingJoinForAuth = false;
+                    showToast(err.message || 'Could not redeem invite link', true);
+                }
+            } else {
+                const dialog = document.getElementById('join-trip-modal');
+                if (dialog && !dialog.open) {
+                    openJoinTripModal(pending);
+                }
+            }
+        }
+
+        function openJoinTripModal(prefillCode = '') {
+            const dialog = document.getElementById('join-trip-modal');
+            const input = document.getElementById('join-code-input');
+            const authNote = document.getElementById('join-auth-note');
+            if (!dialog || !input) return;
+
+            input.value = prefillCode ? (window.PackListCloud?.formatJoinCode(prefillCode) || formatJoinCodeLocal(prefillCode)) : '';
+            input.setAttribute('aria-invalid', 'false');
+            input.classList.remove('user-invalid-fallback', 'user-valid-fallback');
+
+            if (authNote) {
+                authNote.classList.toggle('hidden', isCloudActive());
+            }
+            dialog.showModal();
+        }
+
+        async function handleJoinTripSubmit(event) {
+            event.preventDefault();
+            const input = document.getElementById('join-code-input');
+            const submitBtn = document.getElementById('join-trip-submit-btn');
+            const rawCode = input?.value.trim() || '';
+            const cleanCode = rawCode.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            if (!cleanCode) return;
+
+            if (!isCloudActive()) {
+                try {
+                    sessionStorage.setItem('packlist_pending_join_code', cleanCode);
+                } catch (_) {}
+                window.PackListCloud?.setPendingJoinCode(cleanCode);
+                isSubmittingJoinForAuth = true;
+                document.getElementById('join-trip-modal')?.close();
+                isSubmittingJoinForAuth = false;
+                await handleGoogleSignIn();
+                return;
+            }
+
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                const res = await window.PackListCloud.redeemJoinCode(cleanCode);
+                appState.activeTripId = res.tripId;
+                persistActiveTripSelection();
+                document.getElementById('join-trip-modal')?.close();
+                showToast(res.alreadyMember ? `You're already in "${res.tripTitle}"` : `Joined "${res.tripTitle}"!`);
+            } catch (err) {
+                showToast(err.message || 'Invalid join code', true);
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        function openShareTripModal() {
+            const dialog = document.getElementById('share-trip-modal');
+            if (!dialog) return;
+            renderShareModalContent();
+            dialog.showModal();
+        }
+
+        function renderShareModalContent() {
+            const body = document.getElementById('share-modal-body');
+            const subtitle = document.getElementById('share-trip-subtitle');
+            const activeTrip = getActiveTrip();
+            if (!body || !activeTrip) return;
+
+            if (subtitle) {
+                subtitle.textContent = `Sharing "${activeTrip.title}"`;
+            }
+
+            if (!isCloudActive()) {
+                body.innerHTML = `
+                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 text-center space-y-3">
+                        <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                            Sign in with Google to sync this trip to the cloud and share it with family or friends via join code or email invite.
+                        </p>
+                        <button type="button" onclick="handleGoogleSignIn().then(u => { if (u) renderShareModalContent(); })" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition">
+                            <i class="ph-bold ph-google-logo"></i>
+                            <span>Sign in with Google</span>
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const user = window.PackListCloud.getUser();
+            const isOwner = isTripOwner(activeTrip);
+            const codeEnabled = Boolean(activeTrip.joinCodeEnabled && activeTrip.joinCode);
+            const formattedCode = codeEnabled ? window.PackListCloud.formatJoinCode(activeTrip.joinCode) : '';
+            const invitedEmails = Array.isArray(activeTrip.invitedEmails) ? activeTrip.invitedEmails : [];
+            const membersMap = activeTrip.members && typeof activeTrip.members === 'object' ? activeTrip.members : {};
+            const memberEntries = Object.entries(membersMap);
+            const joinedEmailsSet = new Set(memberEntries.map(([, m]) => (m?.email || '').toLowerCase()).filter(Boolean));
+
+            const membersHtml = memberEntries.map(([uid, info]) => {
+                const name = info?.displayName || info?.email || 'Member';
+                const email = info?.email || '';
+                const role = uid === activeTrip.ownerUid ? 'Owner' : 'Editor';
+                const isSelf = user && uid === user.uid;
+                return `
+                    <div class="flex items-center justify-between gap-2.5 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+                        <div class="min-w-0">
+                            <div class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                ${escapeHtml(name)} ${isSelf ? '<span class="text-slate-400">(You)</span>' : ''}
+                            </div>
+                            ${email ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">${escapeHtml(email)}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-md ${role === 'Owner' ? 'bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'}">${role}</span>
+                            ${isOwner && uid !== activeTrip.ownerUid ? `
+                                <button type="button" data-uid="${escapeHtml(uid)}" onclick="handleRemoveMember(this.dataset.uid)" class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition" title="Remove member" aria-label="Remove ${escapeHtml(name)}">
+                                    <i class="ph ph-x text-sm"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (!isOwner) {
+                body.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800/60 text-xs text-indigo-800 dark:text-indigo-200">
+                            You have collaborator edit access to this trip. Only the owner (<span class="font-semibold">${escapeHtml(activeTrip.ownerName || activeTrip.ownerEmail || 'Owner')}</span>) can manage invites or delete this trip.
+                        </div>
+                        ${codeEnabled ? `
+                            <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Active Join Code</div>
+                                    <div class="text-base font-mono font-extrabold tracking-widest text-slate-900 dark:text-white mt-0.5">${escapeHtml(formattedCode)}</div>
+                                </div>
+                                <button type="button" onclick="copyShareCode()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition">
+                                    Copy Code
+                                </button>
+                            </div>
+                        ` : ''}
+                        <div>
+                            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Collaborators (${memberEntries.length})</h2>
+                            <div class="space-y-1.5">${membersHtml}</div>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="document.getElementById('share-trip-modal')?.close(); openDeleteTripModal();" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition">
+                                Leave Shared Trip
+                            </button>
+                            <button type="button" onclick="document.getElementById('share-trip-modal')?.close()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const invitedListHtml = invitedEmails.length > 0
+                ? invitedEmails.map(email => {
+                    const joined = joinedEmailsSet.has(email.toLowerCase());
+                    return `
+                        <div class="flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+                            <span class="text-xs text-slate-700 dark:text-slate-200 truncate">${escapeHtml(email)}</span>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded ${joined ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'}">
+                                    ${joined ? 'Joined' : 'Pending'}
+                                </span>
+                                <button type="button" data-email="${escapeHtml(email)}" onclick="handleRemoveInvitedEmail(this.dataset.email)" class="p-1 rounded text-slate-400 hover:text-rose-600 transition" title="Revoke invite" aria-label="Remove ${escapeHtml(email)}">
+                                    <i class="ph ph-trash text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : `<p class="text-xs text-slate-400 dark:text-slate-500 italic">No email invites added yet.</p>`;
+
+            body.innerHTML = `
+                <div class="space-y-5">
+                    <!-- Join Code Section -->
+                    <section class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-900 dark:text-white">Join Code & Link</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Anyone signed in with this code can edit this trip</p>
+                            </div>
+                            <button type="button" onclick="handleToggleJoinCode()" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${codeEnabled ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300'}">
+                                ${codeEnabled ? 'Enabled' : 'Enable Code'}
+                            </button>
+                        </div>
+                        ${codeEnabled ? `
+                            <div class="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                                <span class="text-lg font-mono font-extrabold tracking-widest text-brand-600 dark:text-brand-400">${escapeHtml(formattedCode)}</span>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <button type="button" onclick="copyShareCode()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                                        <i class="ph ph-copy"></i> Code
+                                    </button>
+                                    <button type="button" onclick="copyShareLink()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-brand-50 dark:bg-brand-950/70 text-brand-700 dark:text-brand-300 hover:bg-brand-100 transition">
+                                        <i class="ph ph-link"></i> Copy Link
+                                    </button>
+                                    <button type="button" onclick="handleRotateJoinCode()" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition" title="Generate a new code and invalidate the old one">
+                                        <i class="ph ph-arrows-clockwise"></i> Rotate
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </section>
+
+                    <!-- Email Invite List -->
+                    <section>
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Invite by Google Email</h2>
+                        <form id="invite-email-form" onsubmit="handleInviteEmail(event)" class="mb-3">
+                            <span id="invite-email-hint" class="field-hint text-slate-500 dark:text-slate-400">Format: family.member@example.com</span>
+                            <div class="flex gap-2 items-start">
+                                <div class="flex-1">
+                                    <input
+                                        type="email"
+                                        id="invite-email-input"
+                                        name="inviteEmail"
+                                        required
+                                        autocomplete="email"
+                                        placeholder="friend@gmail.com"
+                                        aria-describedby="invite-email-hint"
+                                        data-error="invite-email-error"
+                                        class="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-900 dark:text-white"
+                                    >
+                                    <div id="invite-email-error" class="error-msg">
+                                        <span role="img" aria-label="Error">❌</span> Enter an email address in the format you@example.com.
+                                    </div>
+                                </div>
+                                <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition shrink-0">
+                                    Invite
+                                </button>
+                            </div>
+                        </form>
+                        <div class="space-y-1.5 max-h-32 overflow-y-auto">${invitedListHtml}</div>
+                    </section>
+
+                    <!-- Collaborators List -->
+                    <section>
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">People with Access (${memberEntries.length})</h2>
+                        <div class="space-y-1.5 max-h-40 overflow-y-auto">${membersHtml}</div>
+                    </section>
+
+                    <div class="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" onclick="document.getElementById('share-trip-modal')?.close()" class="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition">
+                            Done
+                        </button>
+                    </div>
+                </div>
+            `;
+            syncAriaInRoot(body);
+        }
+
+        async function handleToggleJoinCode() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip || !isCloudActive()) return;
+            try {
+                const nextEnabled = !(activeTrip.joinCodeEnabled && activeTrip.joinCode);
+                await window.PackListCloud.setJoinCodeEnabled(activeTrip, nextEnabled);
+                showToast(nextEnabled ? 'Join code enabled' : 'Join code disabled');
+            } catch (err) {
+                showToast(err.message || 'Failed to update join code', true);
+            }
+        }
+
+        async function handleRotateJoinCode() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip || !isCloudActive()) return;
+            try {
+                await window.PackListCloud.enableOrRotateJoinCode(activeTrip);
+                showToast('Generated a new join code (old code disabled)');
+            } catch (err) {
+                showToast(err.message || 'Failed to rotate join code', true);
+            }
+        }
+
+        async function copyTextSafe(text, successMsg) {
+            try {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    await navigator.clipboard.writeText(text);
+                } else if (!legacyCopy(text)) {
+                    throw new Error('Copy unavailable');
+                }
+                showToast(successMsg);
+            } catch (_) {
+                if (legacyCopy(text)) {
+                    showToast(successMsg);
+                } else {
+                    showToast('Could not copy automatically', true);
+                }
+            }
+        }
+
+        function copyShareCode() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip?.joinCode) return;
+            copyTextSafe(window.PackListCloud.formatJoinCode(activeTrip.joinCode), 'Join code copied!');
+        }
+
+        function copyShareLink() {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip?.joinCode) return;
+            const shareUrl = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(activeTrip.joinCode)}`;
+            copyTextSafe(shareUrl, 'Invite link copied!');
+        }
+
+        async function handleInviteEmail(event) {
+            event.preventDefault();
+            const activeTrip = getActiveTrip();
+            const input = document.getElementById('invite-email-input');
+            if (!activeTrip || !input || !isCloudActive()) return;
+
+            try {
+                const added = await window.PackListCloud.addInvitedEmail(activeTrip, input.value);
+                input.value = '';
+                input.setAttribute('aria-invalid', 'false');
+                showToast(`Invited ${added}`);
+            } catch (err) {
+                showToast(err.message || 'Unable to invite email', true);
+            }
+        }
+
+        async function handleRemoveInvitedEmail(email) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip || !email || !isCloudActive()) return;
+            try {
+                await window.PackListCloud.removeInvitedEmail(activeTrip, email);
+                showToast(`Removed invite for ${email}`);
+            } catch (err) {
+                showToast(err.message || 'Unable to remove invite', true);
+            }
+        }
+
+        async function handleRemoveMember(uid) {
+            const activeTrip = getActiveTrip();
+            if (!activeTrip || !uid || !isCloudActive()) return;
+            try {
+                await window.PackListCloud.removeMember(activeTrip, uid);
+                showToast('Collaborator removed');
+            } catch (err) {
+                showToast(err.message || 'Unable to remove collaborator', true);
+            }
+        }
+
+        function openMigrationModal(localTrips) {
+            const dialog = document.getElementById('migrate-trips-modal');
+            const countEl = document.getElementById('migrate-trips-count');
+            const listEl = document.getElementById('migrate-trips-list');
+            if (!dialog || !countEl || !listEl) return;
+
+            countEl.textContent = String(localTrips.length);
+            listEl.innerHTML = localTrips.map(t => {
+                const stats = getTripStats(t);
+                return `<li class="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <span class="font-semibold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(t.title || 'Untitled Trip')}</span>
+                    <span class="text-slate-500 dark:text-slate-400 shrink-0">${stats.total} items</span>
+                </li>`;
+            }).join('');
+
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        }
+
+        async function confirmLocalMigration() {
+            const btn = document.getElementById('migrate-upload-btn');
+            const localTrips = getLocalGuestTrips();
+            if (btn) btn.disabled = true;
+            try {
+                const ids = await window.PackListCloud.uploadLocalTrips(localTrips);
+                if (ids.length > 0) {
+                    appState.activeTripId = ids[0];
+                    persistActiveTripSelection();
+                }
+                document.getElementById('migrate-trips-modal')?.close();
+                showToast(`Uploaded ${ids.length} local trip(s) to cloud`);
+            } catch (err) {
+                showToast(err.message || 'Failed to upload local trips', true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function skipLocalMigration() {
+            window.PackListCloud?.markMigrationSkipped();
+            document.getElementById('migrate-trips-modal')?.close();
+            if (isCloudActive() && appState.trips.length === 0 && !hasCreatedStarterCloudTrip) {
+                hasCreatedStarterCloudTrip = true;
+                const starter = createTripObject('🏖️ Summer Beach Getaway', 'default');
+                appState.activeTripId = starter.id;
+                persistActiveTripSelection();
+                try {
+                    await window.PackListCloud.createTrip(starter);
+                } catch (err) {
+                    console.error('Starter cloud trip creation failed:', err);
+                }
+            }
+        }
+
+        // Modern Web Guidance: <dialog closedby="any"> fallback for browsers lacking closedBy
+        function initDialogFallbacks() {
+            const joinDialog = document.getElementById('join-trip-modal');
+            if (joinDialog) {
+                joinDialog.addEventListener('close', () => {
+                    if (!isSubmittingJoinForAuth) {
+                        try {
+                            sessionStorage.removeItem('packlist_pending_join_code');
+                        } catch (_) {}
+                        window.PackListCloud?.clearPendingJoinCode();
+                    }
+                });
+            }
+
+            const migrateDialog = document.getElementById('migrate-trips-modal');
+            if (migrateDialog) {
+                migrateDialog.addEventListener('cancel', (e) => {
+                    e.preventDefault();
+                    skipLocalMigration();
+                });
+            }
+
+            if (!('closedBy' in HTMLDialogElement.prototype)) {
+                const outside = (e, dialog) => {
+                    const r = dialog.getBoundingClientRect();
+                    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+                };
+                for (const dialog of document.querySelectorAll('dialog[closedby="any"]')) {
+                    let pressedOutside = false;
+                    dialog.addEventListener('pointerdown', (e) => {
+                        pressedOutside = outside(e, dialog);
+                    });
+                    dialog.addEventListener('pointerup', (e) => {
+                        if (pressedOutside && outside(e, dialog)) {
+                            dialog.close();
+                        }
+                    });
+                }
+            }
+        }
+
+        // Modern Web Guidance: ARIA + polite live-region sync for :user-invalid forms (plus fallback)
+        const validationAnnouncer = document.createElement('div');
+        validationAnnouncer.setAttribute('aria-live', 'polite');
+        validationAnnouncer.classList.add('visually-hidden');
+        document.body.append(validationAnnouncer);
+        let validationAnnounceTimer;
+        let validationAnnouncedField;
+        const validationFlagged = new WeakSet();
+        const validationAnnounced = new WeakSet();
+
+        function linkFieldError(el, shown) {
+            const errorId = el.dataset.error;
+            if (!errorId) return;
+            const ids = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter(id => id && id !== errorId);
+            if (shown) ids.push(errorId);
+            if (ids.length) el.setAttribute('aria-describedby', ids.join(' '));
+            else el.removeAttribute('aria-describedby');
+        }
+
+        function spokenNodeText(node) {
+            const copy = node.cloneNode(true);
+            copy.querySelectorAll('[aria-hidden="true"]').forEach(n => n.remove());
+            copy.querySelectorAll('[role="img"][aria-label]').forEach(n => n.replaceWith(`${n.getAttribute('aria-label')}: `));
+            return copy.textContent.replace(/\s+/g, ' ').trim();
+        }
+
+        function announceFieldError(el) {
+            const error = document.getElementById(el.dataset.error);
+            if (!error) return;
+            const label = el.labels?.[0] ? `${spokenNodeText(el.labels[0])}: ` : '';
+            clearTimeout(validationAnnounceTimer);
+            validationAnnouncer.textContent = '';
+            validationAnnouncedField = el;
+            validationAnnounceTimer = setTimeout(() => {
+                validationAnnouncer.textContent = label + spokenNodeText(error);
+            }, 500);
+        }
+
+        function syncFieldAria(el, announce = false) {
+            if (!el.matches?.('input, select, textarea') || !el.dataset?.error) return;
+            const invalid = CSS.supports('selector(:user-invalid)')
+                ? el.matches(':user-invalid')
+                : el.classList.contains('user-invalid-fallback');
+            if (invalid) {
+                if (announce && !validationAnnounced.has(el)) {
+                    announceFieldError(el);
+                    validationAnnounced.add(el);
+                }
+                el.setAttribute('aria-invalid', 'true');
+                linkFieldError(el, true);
+                validationFlagged.add(el);
+            } else if (validationFlagged.has(el) || el.getAttribute('aria-invalid') !== 'true') {
+                el.setAttribute('aria-invalid', 'false');
+                linkFieldError(el, false);
+                validationFlagged.delete(el);
+                validationAnnounced.delete(el);
+                if (validationAnnouncedField === el) {
+                    clearTimeout(validationAnnounceTimer);
+                    validationAnnouncer.textContent = '';
+                }
+            }
+        }
+
+        function syncAriaInRoot(root = document) {
+            root.querySelectorAll('input[data-error], select[data-error], textarea[data-error]').forEach(el => {
+                if (!el.hasAttribute('aria-invalid')) el.setAttribute('aria-invalid', 'false');
+            });
+        }
+
+        function initAriaValidation() {
+            syncAriaInRoot(document);
+            const dirtyFallback = new WeakMap();
+            const needsUserInvalidFallback = !CSS.supports('selector(:user-invalid)');
+
+            const updateFallbackState = (el) => {
+                const isValid = el.validity.valid;
+                el.classList.toggle('user-invalid-fallback', !isValid);
+                el.classList.toggle('user-valid-fallback', isValid);
+            };
+
+            document.addEventListener('blur', (e) => {
+                if (needsUserInvalidFallback && e.target.dataset?.error && e.target.checkValidity) {
+                    const st = dirtyFallback.get(e.target) || { hasInteracted: false, hasBlurred: false };
+                    st.hasBlurred = true;
+                    dirtyFallback.set(e.target, st);
+                    if (st.hasInteracted) updateFallbackState(e.target);
+                }
+                syncFieldAria(e.target, true);
+            }, true);
+
+            document.addEventListener('input', (e) => {
+                if (needsUserInvalidFallback && e.target.dataset?.error && e.target.checkValidity) {
+                    const st = dirtyFallback.get(e.target) || { hasInteracted: false, hasBlurred: false };
+                    st.hasInteracted = true;
+                    dirtyFallback.set(e.target, st);
+                    if (st.hasBlurred) updateFallbackState(e.target);
+                }
+                if (e.target.hasAttribute?.('aria-invalid')) syncFieldAria(e.target);
+            });
+
+            document.addEventListener('change', (e) => syncFieldAria(e.target, true), true);
+
+            document.addEventListener('invalid', (e) => {
+                if (needsUserInvalidFallback && e.target.dataset?.error) {
+                    dirtyFallback.set(e.target, { hasInteracted: true, hasBlurred: true });
+                    updateFallbackState(e.target);
+                }
+                validationAnnounced.add(e.target);
+                syncFieldAria(e.target);
+            }, true);
+        }
+
+        window.PackListApp = {
+            onAuthChange(user) {
+                isCloudSession = Boolean(user);
+                hasCreatedStarterCloudTrip = false;
+                hasPromptedMigrationThisSession = false;
+                renderAuthUI();
+
+                if (!user) {
+                    loadState();
+                    populateGlobalCategoryDropdown();
+                    renderAll();
+                } else {
+                    processPendingJoinIfAny();
+                }
+            },
+
+            onSyncStatusChange(status) {
+                currentCloudSyncStatus = status;
+                renderAuthUI();
+                if (document.getElementById('account-modal')?.open) {
+                    updateAccountModalInfo();
+                }
+            },
+
+            async onCloudTripsUpdate(cloudTrips, { initialLoad, fromCache, serverSynced } = {}) {
+                if (!isCloudActive()) return;
+                const user = window.PackListCloud.getUser();
+                const localTrips = getLocalGuestTrips();
+
+                if (cloudTrips.length === 0) {
+                    appState.trips = [];
+                    if (fromCache && navigator.onLine && !serverSynced) {
+                        return;
+                    }
+                    if (window.PackListCloud.needsMigrationCheck(localTrips)) {
+                        if (!hasPromptedMigrationThisSession) {
+                            hasPromptedMigrationThisSession = true;
+                            openMigrationModal(localTrips);
+                        }
+                        return;
+                    }
+                    if (document.getElementById('migrate-trips-modal')?.open) {
+                        return;
+                    }
+                    if (!hasCreatedStarterCloudTrip) {
+                        hasCreatedStarterCloudTrip = true;
+                        const starter = createTripObject('🏖️ Summer Beach Getaway', 'default');
+                        appState.activeTripId = starter.id;
+                        persistActiveTripSelection();
+                        try {
+                            await window.PackListCloud.createTrip(starter);
+                        } catch (err) {
+                            console.error('Failed creating starter cloud trip:', err);
+                        }
+                    }
+                    return;
+                }
+
+                appState.trips = cloudTrips;
+                const savedActiveId = user ? localStorage.getItem(`packlist_cloud_active_trip_${user.uid}`) : null;
+                if (!cloudTrips.some(t => t.id === appState.activeTripId)) {
+                    if (savedActiveId && cloudTrips.some(t => t.id === savedActiveId)) {
+                        appState.activeTripId = savedActiveId;
+                    } else {
+                        appState.activeTripId = cloudTrips[0].id;
+                    }
+                }
+
+                populateGlobalCategoryDropdown();
+                renderAll();
+
+                if ((serverSynced || !navigator.onLine) && !hasPromptedMigrationThisSession && window.PackListCloud.needsMigrationCheck(localTrips)) {
+                    hasPromptedMigrationThisSession = true;
+                    openMigrationModal(localTrips);
+                }
+                if (document.getElementById('share-trip-modal')?.open) {
+                    renderShareModalContent();
+                }
+                if (document.getElementById('account-modal')?.open) {
+                    updateAccountModalInfo();
+                }
+            },
+
+            notifyToast(message, isError = false) {
+                showToast(message, isError);
+            }
+        };
+
         // Close modals on Escape key or backdrop click
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -2245,7 +3507,12 @@
             }
         });
 
-        window.onload = initApp;
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
     </script>
+    <script type="module" src="./firebase-sync.js"></script>
 </body>
 </html>
